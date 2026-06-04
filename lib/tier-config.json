@@ -2,7 +2,7 @@
   "normal": {
     "label": "Normal",
     "icon": "✅",
-    "description": "Zero quality loss. Deterministic compression + coach + manifest + haiku routing.",
+    "description": "Zero quality loss. Coach + cheap-pattern coaching + manifest + haiku routing. No output is elided.",
     "coach": {
       "enabled": true,
       "max_preamble_words": 50,
@@ -17,16 +17,7 @@
       "trivial_keywords": ["list", "show", "print", "what", "which", "where", "format"]
     },
     "compress_output": {
-      "enabled": true,
-      "threshold_lines": 200,
-      "head_lines": 30,
-      "tail_lines": 15,
-      "list_cap": 50,
-      "flash_fallback_lines": 999999,
-      "preserve_errors": true,
-      "preserve_stacktraces": true,
-      "preserve_paths": true,
-      "dedup": { "enabled": true, "min_lines": 15, "max_entries": 50 }
+      "enabled": false
     },
     "prevention": {
       "enabled": false

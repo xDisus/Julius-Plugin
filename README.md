@@ -53,26 +53,21 @@ output) and **caveman** (model output); Julius hooks alone contribute the smalle
 
 ## Features
 
-### Normal (always on)
+### Normal (always on — lossless: nothing the model sees is elided)
 
 | Feature | Mechanism | What it does |
 |---------|-----------|-------------|
 | **Turn Coach** 🏋️ | `Stop` hook | Reads the last assistant turn from the transcript; flags wasteful planning prose alongside tool calls. Advisory only (never blocks). |
+| **Cheap-Pattern Coaching** 🧭 | `PreToolUse` (Bash) | Advisory nudges: `cat <file>` → Read, `cat \| grep` → Grep tool. Skips heredocs/targeted commands. Adds a hint; removes nothing. |
 | **Task Manifest** ✅ | `TaskCreated` + `TaskCompleted` | Maintains a compact `[TASKS] 2/6 done. Active: …` digest. |
 | **Haiku Routing** 🎯 | Agent `tier-router.md` | Trivial tasks delegated to haiku workers, freeing the main model. |
 
-### Deterministic compression (all tiers — the default first pass)
+### Pro+ (deterministic compression — the default first pass; may elide output middles)
 
 | Feature | Mechanism | What it does |
 |---------|-----------|-------------|
-| **Tool-Output Compression** ✂️ | `PostToolUse` (Bash, Read, Grep, Glob) | Deterministic, offline truncation (middle-out keeping head+tail+all error/warn lines), ANSI strip, consecutive-dup collapse, and list capping. Replaces output via `updatedToolOutput` (object for Bash, string for the rest). **Always preserves errors/paths; on any failure the original output is kept (no data loss); works without an API key.** |
+| **Tool-Output Compression** ✂️ | `PostToolUse` (Bash, Read, Grep, Glob) | Deterministic, offline truncation (middle-out keeping head+tail+all error/warn lines), ANSI strip, consecutive-dup collapse, and list capping. Replaces output via `updatedToolOutput` (object for Bash, string for the rest). **Always preserves errors/paths; on any failure the original output is kept (no data loss); works without an API key.** Elides large-output middles — that's why it starts at Pro, not Normal. |
 | **Repeated-Output Dedup** 🪞 | `PostToolUse` | Exact in-session repeats become `[same as earlier output of …]`. Bounded store, oldest evicted. |
-| **Cheap-Pattern Coaching** 🧭 | `PreToolUse` (Bash) | Advisory nudges: `cat <file>` → Read, `cat \| grep` → Grep tool. Skips heredocs/targeted commands. |
-
-### Pro+
-
-| Feature | Mechanism | What it does |
-|---------|-----------|-------------|
 | **Read-Range Prevention** 📐 | `PreToolUse` (Read) | Medium-size reads with no offset/limit get a pagination nudge — keep the whole file out of context. Advisory; yields the large band to Large-File Guard. |
 | **Batch Synthesis** 🔗 | `PostToolBatch` | Cross-references parallel tool outputs into one dense synthesis. |
 | **Agent Pipelines** 🔄 | `TeammateIdle` | When a teammate idles with pending work, redirects it. Capped by `max_reactivations`. |
@@ -104,7 +99,7 @@ UserPromptSubmit       → oracle-preprocess.sh   (Beast: flash pre-processes pr
 PreToolUse Read        → large-file-guard.sh    (Beast: redirect large reads)
                        → read-grep-guard.sh     (Pro+: read-range nudge)
 PreToolUse Bash        → coach-patterns.sh      (All: cheap-pattern coaching)
-PostToolUse B/R/G/G    → compress-output.sh     (All: deterministic; Beast: +flash)
+PostToolUse B/R/G/G    → compress-output.sh     (Pro+: deterministic; Beast: +flash)
 PostToolBatch          → batch-synthesizer.sh   (Pro+: cross-reference batch)
 Stop                   → turn-coach.sh          (All: efficiency coaching)
                        → metrics-stop.sh        (All: real token/cost metrics)

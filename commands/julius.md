@@ -18,8 +18,8 @@ Julius controls token-saving aggressiveness. Read the tier argument:
    - **invalid**: Print "Invalid tier. Usage: /julius normal | pro | beast"
 
 4. After setting tier, show a one-liner of what changes:
-   - **Normal**: "Deterministic output compression + dedup + coaching + manifest + haiku routing"
-   - **Pro**: "Above + read-range prevention + Batch Synthesis + Agent Pipelines"
+   - **Normal**: "Coach + cheap-pattern coaching + Task Manifest + Haiku routing (lossless — no output elided)"
+   - **Pro**: "Above + deterministic output compression + dedup + read-range prevention + Batch Synthesis + Agent Pipelines"
    - **Beast**: "Above + Large-File Guard + Flash fallback + Context Oracle + Caveman Agents"
 
 The `tier-setter.sh` script writes the tier name to `.claude/julius/active-tier` and creates the state directory if needed.
