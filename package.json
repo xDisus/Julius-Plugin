@@ -1,0 +1,34 @@
+{
+  "name": "julius-plugin",
+  "version": "1.0.0",
+  "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Every token counts.",
+  "bin": {
+    "julius-plugin": "./bin/install.sh"
+  },
+  "files": [
+    "plugin.json",
+    "commands/",
+    "agents/",
+    "hooks/",
+    "scripts/",
+    "lib/",
+    "bin/",
+    ".claude-plugin/"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude-plugin",
+    "token-economy",
+    "cost-saving",
+    "optimization"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xDisus/Julius-Plugin.git"
+  },
+  "homepage": "https://github.com/xDisus/Julius-Plugin",
+  "license": "MIT",
+  "author": {
+    "name": "xDisus"
+  }
+}

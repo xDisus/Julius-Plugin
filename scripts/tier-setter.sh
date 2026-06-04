@@ -6,8 +6,11 @@ set -euo pipefail
 
 TIER="${1:-}"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-PLUGIN_DATA="${CLAUDE_PLUGIN_DATA:-.claude/julius}"
-STATE_DIR="$(pwd)/${PLUGIN_DATA}"
+if [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
+  STATE_DIR="$CLAUDE_PLUGIN_DATA"
+else
+  STATE_DIR="$(pwd)/.claude/julius"
+fi
 
 # Validate tier
 if [ -z "$TIER" ]; then
