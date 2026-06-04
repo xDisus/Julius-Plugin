@@ -2,7 +2,15 @@
 
 > *"Every token counts." — Julius Rock, 1987*
 
-Julius cuts Claude Code token consumption by **10-60%** using lifecycle hooks as transparent middleware. The model never knows it's there — it just receives fewer tokens and responds the same.
+Julius is a Claude Code plugin that cuts token consumption by **up to 95%** by combining three complementary tools:
+
+| Tool | What it compresses | Savings |
+|------|-------------------|:-------:|
+| **[context-mode](https://github.com/cc-shared/context-mode)** | Tool output (60-80% of input) | **90-98%** |
+| **[caveman](https://github.com/JuliusBrussee/caveman)** | Model output (20-30% of cost) | **65-75%** |
+| **Julius hooks** | Preprocessing, routing, compaction | **10-30%** |
+
+Together they form a compression stack — Julius is the orchestrator that activates them at the right moments via lifecycle hooks.
 
 ## Quick Install
 
@@ -27,11 +35,24 @@ npx julius-plugin
 
 ## Tiers
 
-| Tier | Token Savings | Risk | Active Features |
-|------|:---:|:---:|-----------------|
-| **Normal** ✅ | ~10% | None | Coach + Manifest + Haiku routing |
-| **Pro** ⚠️ | ~30% | Low (historical nuance) | Above + Output compression + Batch synthesis + Summarization + Pipelines |
-| **Beast** 🦍 | ~60% | Medium (haiku subagents) | Above + Caveman agents + Oracle + Docs compression + Subagent reader |
+Julius orchestrates 3 tools across 3 tiers — you choose the trade-off:
+
+| Tier | Total Savings | Tools Active | Risk |
+|------|:------------:|--------------|------|
+| **Normal** ✅ | ~10% | Julius hooks only (coach, manifest, haiku routing) | None |
+| **Pro** ⚠️ | ~80% | Julius + **context-mode** (tool output sandboxed) | Low (context-mode is proven) |
+| **Beast** 🦍 | ~95% | Julius + context-mode + **caveman** (output compressed) | Medium (caveman rewrites model output) |
+
+### Where the savings come from
+
+```
+Normal:  Julius hooks     → 10%  (cache optimization, structured output, task pruning)
+Pro:     + context-mode   → 80%  (tool output drops from 60K to ~2K tokens)
+Beast:   + caveman        → 95%  (model output drops from 2K to ~500 tokens)
+```
+
+**Pro** alone already saves ~80% because tool output is the biggest token hog.  
+**Beast** adds caveman to compress what the model *says*, pushing past 90%.
 
 ---
 

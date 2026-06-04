@@ -37,13 +37,19 @@ if [ -f "$TIER_FILE" ]; then
     TIER=$(cat "$TIER_FILE")
 fi
 
-# Tier multiplier: how much LESS input tokens Julius uses vs raw Claude Code
-# Normal: ~15% savings, Pro: ~35% savings, Beast: ~55% savings
+# Tier multiplier: how much LESS input tokens the Julius stack uses vs raw Claude Code
+# These reflect the FULL stack (Julius + context-mode + caveman):
+# Normal: ~10% (Julius hooks only — cache, structured output, pruning)
+# Pro:    ~80% (+ context-mode sandboxes tool output — 60K→2K tokens per call)
+# Beast:  ~95% (+ caveman compresses model output — 2K→500 tokens)
 case "$TIER" in
-    beast)  SAVINGS_MULTIPLIER=0.55 ;;
-    pro)    SAVINGS_MULTIPLIER=0.35 ;;
-    *)      SAVINGS_MULTIPLIER=0.15 ;;
+    beast)  SAVINGS_MULTIPLIER=0.95 ;;
+    pro)    SAVINGS_MULTIPLIER=0.80 ;;
+    *)      SAVINGS_MULTIPLIER=0.10 ;;
 esac
+
+# Cap baseline input at 50x actual (prevents absurd estimates on tiny turns)
+MAX_BASELINE_RATIO=50
 
 # ─── Parse transcript for latest token usage ───────────────────
 if [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; then
@@ -75,11 +81,21 @@ fi
 # Actual: what Claude actually charged
 ACTUAL_COST=$(echo "scale=8; ($INPUT_TOKENS * 3 + $OUTPUT_TOKENS * 15) / 1000000" | bc 2>/dev/null || echo "0")
 
-# Baseline: what the SAME work would cost WITHOUT Julius (uncompressed context)
-# Julius reduces effective input tokens by the tier savings — baseline inflates back
+# Baseline: what the SAME work would cost WITHOUT the Julius stack (uncompressed context)
+# Julius stack reduces effective input tokens by the tier savings — baseline inflates back
 BASELINE_INPUT=$(echo "scale=0; $INPUT_TOKENS / (1 - $SAVINGS_MULTIPLIER)" | bc 2>/dev/null || echo "$INPUT_TOKENS")
-# Output tokens are not compressed by Julius (caveman is external), so baseline = actual
-BASELINE_OUTPUT="$OUTPUT_TOKENS"
+# Cap at MAX_BASELINE_RATIO * actual to avoid absurd estimates on tiny turns
+BASELINE_CAP=$(echo "scale=0; $INPUT_TOKENS * $MAX_BASELINE_RATIO" | bc 2>/dev/null || echo "$BASELINE_INPUT")
+if [ "$BASELINE_INPUT" -gt "$BASELINE_CAP" ] 2>/dev/null; then
+    BASELINE_INPUT="$BASELINE_CAP"
+fi
+# Output tokens are compressed by caveman (external, Beast tier) — estimate accordingly
+if [ "$TIER" = "beast" ]; then
+    # Caveman compresses output ~70% → baseline output = 3.3x actual
+    BASELINE_OUTPUT=$(echo "scale=0; $OUTPUT_TOKENS * 3.3" | bc 2>/dev/null || echo "$OUTPUT_TOKENS")
+else
+    BASELINE_OUTPUT="$OUTPUT_TOKENS"
+fi
 BASELINE_COST=$(echo "scale=8; ($BASELINE_INPUT * 3 + $BASELINE_OUTPUT * 15) / 1000000" | bc 2>/dev/null || echo "$ACTUAL_COST")
 
 SAVED=$(echo "scale=8; $BASELINE_COST - $ACTUAL_COST" | bc 2>/dev/null || echo "0")
