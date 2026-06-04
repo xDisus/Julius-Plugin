@@ -15,6 +15,7 @@ TIER=$(julius_tier) || exit 0
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$CMD" ] || exit 0
 

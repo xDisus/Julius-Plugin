@@ -58,6 +58,12 @@ julius_stdin() {
   cat
 }
 
+# True when the argument is valid JSON. Hooks use this to no-op on malformed input
+# instead of letting a downstream jq parse error abort under `set -euo pipefail`.
+julius_is_json() {
+  printf '%s' "$1" | jq -e . >/dev/null 2>&1
+}
+
 # julius_dedup <text> <label> [max] — in-session exact-repeat detection.
 # Prints the stored label and returns 0 when <text> was seen earlier this session;
 # otherwise records it (bounded to <max> entries, oldest evicted) and returns 1.

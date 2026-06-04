@@ -16,6 +16,7 @@ CHECK_PARALLEL=$(julius_config "$TIER" .coach.check_parallel_tools false)
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
 [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || exit 0
 

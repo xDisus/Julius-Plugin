@@ -64,6 +64,9 @@ if [ -n "$OUT" ]; then echo "$OUT" | jq -e '.hookSpecificOutput.hookEventName=="
 run compress-output.sh "$(jq -n '{hook_event_name:"PostToolUse",tool_name:"Read",tool_response:"short"}')"
 [ "$RC" -eq 0 ] && ok "non-Bash tool ignored cleanly" || bad "non-Bash should be ignored (rc=$RC)"
 
+run compress-output.sh "garbage{not json"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "malformed stdin → clean no-op (no crash)" || bad "malformed stdin should no-op (rc=$RC)"
+
 echo
 echo "[oracle-preprocess] UserPromptSubmit"
 set_tier beast

@@ -20,6 +20,7 @@ mkdir -p "$STATE_DIR"
 [ -f "$MANIFEST" ] || echo '{"tasks":[]}' > "$MANIFEST"
 
 INPUT=$(julius_stdin)
+julius_is_json "$INPUT" || INPUT="{}"   # tolerate empty/malformed; jq paths then yield empty
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 case "$ACTION" in

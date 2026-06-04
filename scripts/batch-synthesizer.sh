@@ -15,6 +15,7 @@ MIN_BATCH=$(julius_config "$TIER" .batch_synthesis.min_batch_size 2)
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 
 BATCH_SIZE=$(echo "$INPUT" | jq -r '(.tool_calls | length) // 0' 2>/dev/null)
 [ "$BATCH_SIZE" -ge "$MIN_BATCH" ] 2>/dev/null || exit 0

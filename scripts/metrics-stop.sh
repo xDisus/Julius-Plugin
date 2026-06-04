@@ -23,6 +23,7 @@ mkdir -p "${METRICS_DIR}"
 # NOTE: the Stop event has no `stop_reason` field (only common fields + stop_hook_active),
 # so there is no end_turn gate to apply — Stop fires once when Claude finishes the turn.
 INPUT=$(cat)
+julius_is_json "$INPUT" || exit 0
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""')

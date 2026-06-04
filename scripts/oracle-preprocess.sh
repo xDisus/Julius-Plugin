@@ -20,6 +20,7 @@ MIN_WORDS=$(julius_config "$TIER" .oracle.min_prompt_words 6)
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -n "$PROMPT" ] || exit 0
 

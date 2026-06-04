@@ -15,6 +15,7 @@ THRESHOLD=$(julius_config "$TIER" .subagent_reader.threshold_lines 999999)
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 
 # Never block reads issued from inside a subagent: the julius-reader agent itself
 # uses Read, and blocking it would deadlock the redirect we are recommending.

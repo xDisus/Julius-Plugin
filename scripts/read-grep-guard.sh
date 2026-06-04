@@ -18,6 +18,7 @@ NUDGE=$(julius_config "$TIER" .prevention.read_nudge_lines 100)
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
+julius_is_json "$INPUT" || exit 0
 
 # Don't nudge inside subagents (the reader agent reads freely).
 [ -z "$(echo "$INPUT" | jq -r '.agent_id // empty' 2>/dev/null)" ] || exit 0
