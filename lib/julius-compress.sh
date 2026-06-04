@@ -58,3 +58,17 @@ jc_compress() {
   local head="${1:-20}" tail="${2:-20}"
   jc_strip_ansi | jc_collapse_dups | jc_middle_out "$head" "$tail"
 }
+
+# Cap a newline-separated list to the first N entries, appending "(… M more …)".
+# For file lists (Glob output, Grep files_with_matches) where order-preserving head
+# truncation reads better than middle-out. No-op when the list already fits.
+jc_cap_list() {
+  local n="${1:-40}"
+  awk -v n="$n" '
+    { a[NR]=$0 }
+    END {
+      if (NR<=n) { for (i=1;i<=NR;i++) print a[i]; exit }
+      for (i=1;i<=n;i++) print a[i]
+      printf "(… %d more …)\n", NR-n
+    }'
+}

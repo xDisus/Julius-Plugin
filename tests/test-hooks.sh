@@ -145,6 +145,32 @@ OUT=$(JULIUS_CONFIG="$PCFG" JULIUS_FLASH_BIN="/bin/false" bash -c 'printf "%s" "
   && ok "compress-output Pro stays deterministic (no flash)" || bad "pro flash-gate (rc=$RC)"
 set_tier beast
 
+# U3: Read/Grep/Glob deterministic compression (string-shaped updatedToolOutput).
+READBIG=$(seq 1 300)
+run compress-output.sh "$(jq -n --arg t "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Read",tool_input:{file_path:"big.py"},tool_response:$t}')"
+if [ "$RC" -eq 0 ] && echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
+   && echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' | grep -q "elided"; then
+  ok "compress-output Read: string updatedToolOutput, shrank"
+else
+  bad "compress-output Read path (rc=$RC, out=$OUT)"
+fi
+
+run compress-output.sh "$(jq -n --arg t "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"content"},tool_response:$t}')"
+echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
+  && ok "compress-output Grep content: line-truncated string" || bad "grep content (out=$OUT)"
+
+FILELIST=$(for i in $(seq 1 200); do echo "src/file_$i.py"; done)
+run compress-output.sh "$(jq -n --arg t "$FILELIST" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"files_with_matches"},tool_response:$t}')"
+echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
+  && ok "compress-output Grep files_with_matches: capped list" || bad "grep files cap (out=$OUT)"
+
+run compress-output.sh "$(jq -n '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"count"},tool_response:"42"}')"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "compress-output Grep count: left untouched" || bad "grep count (out=$OUT)"
+
+run compress-output.sh "$(jq -n --arg t "$FILELIST" '{hook_event_name:"PostToolUse",tool_name:"Glob",tool_input:{pattern:"**/*.py"},tool_response:$t}')"
+echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
+  && ok "compress-output Glob: capped list" || bad "glob cap (out=$OUT)"
+
 # oracle-preprocess: non-trivial prompt → additionalContext with [ORACLE].
 # Use a stable cwd whose contents don't change between calls (the project index is
 # part of the cache key — a mutating dir would legitimately invalidate the cache).
