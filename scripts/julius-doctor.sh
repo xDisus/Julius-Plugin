@@ -133,6 +133,43 @@ else
   warn "Tier not set — run /julius pro"
 fi
 
+# ── COMPAT ──
+echo ""
+printf "\033${BOLD}═══ COMPATIBILITY ═══\033${NC}\n"
+
+# Check context-mode (mksglu/context-mode)
+CTX_MODE_DIR=""
+for d in "$HOME/.claude/plugins/context-mode" "$HOME/.claude/plugins/cache/context-mode"; do
+  [ -d "$d" ] && CTX_MODE_DIR="$d" && break
+done
+if [ -n "$CTX_MODE_DIR" ]; then
+  ok "context-mode installed → full synergy (output sandbox + hook compression)"
+else
+  warn "context-mode not found — install for output sandboxing: /plugin install context-mode@context-mode"
+fi
+
+# Check caveman agents (Julius internal)
+CAVEMAN_OK=0
+for agent in "caveman-reader" "caveman-executor" "caveman-researcher"; do
+  if grep -q "name: $agent" "$ROOT/agents/$agent.md" 2>/dev/null; then
+    CAVEMAN_OK=$((CAVEMAN_OK + 1))
+  fi
+done
+if [ "$CAVEMAN_OK" -eq 3 ]; then
+  ok "Caveman agents: all 3 valid (reader, executor, researcher)"
+elif [ "$CAVEMAN_OK" -gt 0 ]; then
+  warn "Caveman agents: $CAVEMAN_OK/3 valid"
+else
+  fail "Caveman agents: none valid"
+fi
+
+# Check tier-router agent
+if grep -q "name: tier-router" "$ROOT/agents/tier-router.md" 2>/dev/null; then
+  ok "Agent tier-router: haiku worker valid"
+else
+  fail "Agent tier-router: missing or invalid"
+fi
+
 # ── DIST ──
 echo ""
 printf "\033${BOLD}═══ DISTRIBUTION ═══\033${NC}\n"
