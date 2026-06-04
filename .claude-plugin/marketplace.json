@@ -10,8 +10,8 @@
     {
       "name": "julius",
       "source": {
-        "source": "github",
-        "repo": "xDisus/Julius-Plugin"
+        "source": "url",
+        "url": "https://github.com/xDisus/Julius-Plugin.git"
       },
       "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Every token counts.",
       "version": "1.0.0",
