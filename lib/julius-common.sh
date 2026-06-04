@@ -57,3 +57,22 @@ julius_stdin() {
   [ -t 0 ] && return 0
   cat
 }
+
+# julius_dedup <text> <label> [max] — in-session exact-repeat detection.
+# Prints the stored label and returns 0 when <text> was seen earlier this session;
+# otherwise records it (bounded to <max> entries, oldest evicted) and returns 1.
+julius_dedup() {
+  local text="$1" label="$2" max="${3:-50}"
+  local dir hash f count
+  dir="$(julius_state_dir)/dedup"
+  hash=$(printf '%s' "$text" | julius_md5)
+  f="$dir/$hash"
+  if [ -f "$f" ]; then cat "$f"; return 0; fi
+  mkdir -p "$dir"
+  printf '%s' "$label" > "$f"
+  count=$(ls -1 "$dir" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$count" -gt "$max" ] 2>/dev/null; then
+    ls -1t "$dir" 2>/dev/null | tail -n +"$((max+1))" | while IFS= read -r old; do rm -f "$dir/$old"; done
+  fi
+  return 1
+}

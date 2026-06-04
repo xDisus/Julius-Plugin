@@ -171,6 +171,41 @@ run compress-output.sh "$(jq -n --arg t "$FILELIST" '{hook_event_name:"PostToolU
 echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
   && ok "compress-output Glob: capped list" || bad "glob cap (out=$OUT)"
 
+# U4: in-session dedup.
+DCFG="$TMP/dedup-cfg.json"
+jq -n '{beast:{compress_output:{enabled:true,threshold_lines:5,head_lines:50,tail_lines:50,dedup:{enabled:true,min_lines:10,max_entries:3}}}}' > "$DCFG"
+rm -rf "$JULIUS_STATE_DIR/dedup"
+run_dcfg() { OUT=$(JULIUS_CONFIG="$DCFG" bash -c 'printf "%s" "$1" | "$2/compress-output.sh"' _ "$1" "$SCRIPTS" 2>/dev/null); }
+DTEXT=$(seq 1 50)
+DIN=$(jq -n --arg o "$DTEXT" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"make build"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')
+run_dcfg "$DIN"   # first sight — records, no back-ref
+FIRST="$OUT"
+run_dcfg "$DIN"   # repeat — back-reference
+if ! echo "$FIRST" | grep -q "same as earlier" && echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput.stdout' 2>/dev/null | grep -q "same as earlier output of make build"; then
+  ok "dedup: exact repeat → back-reference (first sight not deduped)"
+else
+  bad "dedup repeat (first=$FIRST out=$OUT)"
+fi
+
+# Distinct output is not deduped.
+DIN2=$(jq -n --arg o "$(seq 100 160)" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"make test"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')
+run_dcfg "$DIN2"
+echo "$OUT" | grep -q "same as earlier" && bad "dedup false positive on distinct output" || ok "dedup: distinct output not deduped"
+
+# Below min_lines: not deduped even on repeat.
+SMIN=$(jq -n --arg o "$(seq 1 4)" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"echo hi"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')
+run_dcfg "$SMIN"; run_dcfg "$SMIN"
+echo "$OUT" | grep -q "same as earlier" && bad "dedup deduped below min_lines" || ok "dedup: below min_lines skipped"
+
+# Eviction keeps the store bounded.
+for i in $(seq 1 6); do
+  EIN=$(jq -n --arg o "$(seq 1 20 | sed "s/^/v$i-/")" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"c"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')
+  run_dcfg "$EIN"
+done
+DCOUNT=$(ls -1 "$JULIUS_STATE_DIR/dedup" 2>/dev/null | wc -l | tr -d ' ')
+[ "$DCOUNT" -le 3 ] && ok "dedup: store bounded by max_entries ($DCOUNT≤3)" || bad "dedup store unbounded ($DCOUNT)"
+rm -rf "$JULIUS_STATE_DIR/dedup"
+
 # oracle-preprocess: non-trivial prompt → additionalContext with [ORACLE].
 # Use a stable cwd whose contents don't change between calls (the project index is
 # part of the cache key — a mutating dir would legitimately invalidate the cache).
