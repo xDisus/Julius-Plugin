@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Every token counts.",
   "bin": {
-    "julius-plugin": "./bin/install.sh"
+    "julius-plugin": "bin/install.sh"
   },
   "files": [
     "plugin.json",
