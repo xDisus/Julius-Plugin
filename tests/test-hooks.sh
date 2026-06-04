@@ -232,6 +232,34 @@ rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{
 [ -z "$OUT" ] && ok "read-guard: disabled in normal tier" || bad "read-guard normal (out=$OUT)"
 set_tier beast
 
+echo
+echo "[coach-patterns] PreToolUse cheap-pattern coaching"
+CCFG="$TMP/coach-cfg.json"
+jq -n '{beast:{coaching:{cheap_patterns:true}},normal:{coaching:{cheap_patterns:false}}}' > "$CCFG"
+cpn() { OUT=$(JULIUS_CONFIG="$CCFG" bash -c 'printf "%s" "$1" | "$2/coach-patterns.sh"' _ "$1" "$SCRIPTS" 2>/dev/null); }
+
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"cat bigfile.txt"}}')"
+echo "$OUT" | jq -e '.hookSpecificOutput.additionalContext | test("Read tool")' >/dev/null 2>&1 \
+  && ok "coach: cat <file> → suggests Read" || bad "coach cat (out=$OUT)"
+
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"cat app.log | grep ERROR"}}')"
+echo "$OUT" | jq -e '.hookSpecificOutput.additionalContext | test("Grep tool")' >/dev/null 2>&1 \
+  && ok "coach: cat|grep → suggests Grep" || bad "coach cat|grep (out=$OUT)"
+
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"grep -n foo file.py"}}')"
+[ -z "$OUT" ] && ok "coach: targeted grep → no nudge" || bad "coach grep (out=$OUT)"
+
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"ls -la"}}')"
+[ -z "$OUT" ] && ok "coach: unrelated command → no nudge" || bad "coach ls (out=$OUT)"
+
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"cat <<EOF\nhi\nEOF"}}')"
+[ -z "$OUT" ] && ok "coach: heredoc → no nudge" || bad "coach heredoc (out=$OUT)"
+
+printf '%s' "normal" > "$JULIUS_STATE_DIR/active-tier"
+cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"cat bigfile.txt"}}')"
+[ -z "$OUT" ] && ok "coach: disabled when flag off" || bad "coach flag (out=$OUT)"
+set_tier beast
+
 # oracle-preprocess: non-trivial prompt → additionalContext with [ORACLE].
 # Use a stable cwd whose contents don't change between calls (the project index is
 # part of the cache key — a mutating dir would legitimately invalidate the cache).
