@@ -22,6 +22,7 @@ npx julius-plugin
 /julius normal     # Zero quality loss
 /julius pro        # Balanced compression
 /julius beast      # Maximum savings
+/julius-doctor     # Run diagnostic checks
 ```
 
 ## Tiers
