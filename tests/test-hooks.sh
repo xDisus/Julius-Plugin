@@ -161,6 +161,43 @@ else
 fi
 
 echo
+echo "[deterministic primitives] lib/julius-compress.sh"
+# shellcheck source=../lib/julius-compress.sh
+source "$ROOT/lib/julius-compress.sh"
+
+BIG300=$(seq 1 300)
+OUT=$(printf '%s\n' "$BIG300" | jc_middle_out 20 20)
+NLINES=$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')
+if [ "$NLINES" -lt 300 ] && echo "$OUT" | grep -q "lines elided" && echo "$OUT" | grep -qx "1" && echo "$OUT" | grep -qx "300"; then
+  ok "middle_out keeps head+tail, elides middle, marker present"
+else
+  bad "middle_out (nlines=$NLINES)"
+fi
+
+# Preserve an error line buried in the middle.
+PRES=$(printf 'a\nb\nERROR: boom at file.py:42\n%s\ny\nz\n' "$(seq 1 100)" | jc_middle_out 2 2)
+echo "$PRES" | grep -q "ERROR: boom at file.py:42" && ok "middle_out preserves error line in elided region" || bad "middle_out dropped error line"
+
+# Strip ANSI.
+ESC=$(printf '\033')
+STRIPPED=$(printf '%s[31mred%s[0m text\n' "$ESC" "$ESC" | jc_strip_ansi)
+[ "$STRIPPED" = "red text" ] && ok "strip_ansi removes color codes" || bad "strip_ansi got: '$STRIPPED'"
+
+# Collapse consecutive duplicates.
+COLL=$(printf 'x\nx\nx\nx\nx\ny\n' | jc_collapse_dups)
+echo "$COLL" | grep -q "x (×5)" && echo "$COLL" | grep -qx "y" && ok "collapse_dups folds runs into (×N)" || bad "collapse_dups got: $COLL"
+
+# No-op for small input.
+SMALLIN=$(printf 'one\ntwo\nthree\n')
+NOOP=$(printf '%s\n' "$SMALLIN" | jc_middle_out 20 20)
+[ "$NOOP" = "$SMALLIN" ] && ok "middle_out is no-op below head+tail" || bad "middle_out altered small input"
+
+# jc_compress pipeline shrinks a noisy large input.
+COMP=$(printf '%s[32m%s\n' "$ESC" "$(seq 1 500)" | jc_compress 10 10)
+CN=$(printf '%s\n' "$COMP" | wc -l | tr -d ' ')
+[ "$CN" -lt 500 ] && ok "jc_compress pipeline shrinks large input" || bad "jc_compress did not shrink (n=$CN)"
+
+echo
 echo "============================================"
 printf "Passed: %d  Failed: %d\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
