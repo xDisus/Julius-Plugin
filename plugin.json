@@ -1,0 +1,12 @@
+{
+  "name": "julius",
+  "displayName": "Julius Token Economy",
+  "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Named after Julius Rock: every token counts.",
+  "version": "1.0.0",
+  "author": {
+    "name": "xDisus"
+  },
+  "repository": "github:xDisus/Julius-Plugin",
+  "license": "MIT",
+  "tags": ["token-economy", "optimization", "cost-saving", "efficiency"]
+}

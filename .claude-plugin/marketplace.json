@@ -1,0 +1,21 @@
+{
+  "name": "julius-plugin",
+  "displayName": "Julius Plugin Marketplace",
+  "description": "Token economy plugin for Claude Code",
+  "owner": {
+    "name": "xDisus",
+    "email": "renan@disus.cloud"
+  },
+  "plugins": [
+    {
+      "name": "julius",
+      "source": {
+        "source": "github",
+        "repo": "xDisus/Julius-Plugin"
+      },
+      "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Every token counts.",
+      "version": "1.0.0",
+      "tags": ["token-economy", "optimization", "cost-saving"]
+    }
+  ]
+}

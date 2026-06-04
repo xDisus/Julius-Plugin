@@ -1,0 +1,143 @@
+{
+  "normal": {
+    "label": "Normal",
+    "icon": "✅",
+    "description": "Zero quality loss. Coach + manifest + haiku routing only.",
+    "coach": {
+      "enabled": true,
+      "max_preamble_pct": 20,
+      "check_parallel_tools": true
+    },
+    "task_manifest": {
+      "enabled": true
+    },
+    "model_routing": {
+      "mode": "conservative",
+      "trivial_keywords": ["list", "show", "print", "what", "which", "where", "format"]
+    },
+    "compress_output": {
+      "enabled": false
+    },
+    "smart_compact": {
+      "enabled": false
+    },
+    "subagent_reader": {
+      "enabled": false
+    },
+    "batch_synthesis": {
+      "enabled": false
+    },
+    "oracle": {
+      "enabled": false
+    },
+    "agent_pipelines": {
+      "enabled": false
+    },
+    "caveman_agents": {
+      "enabled": false
+    },
+    "docs_compression": {
+      "enabled": false
+    }
+  },
+  "pro": {
+    "label": "Pro",
+    "icon": "⚠️",
+    "description": "Balanced savings. Compression + synthesis + pipelines.",
+    "coach": {
+      "enabled": true,
+      "max_preamble_pct": 15,
+      "check_parallel_tools": true
+    },
+    "task_manifest": {
+      "enabled": true
+    },
+    "model_routing": {
+      "mode": "conservative",
+      "trivial_keywords": ["list", "show", "print", "what", "which", "where", "format", "read", "count"]
+    },
+    "compress_output": {
+      "enabled": true,
+      "threshold_lines": 100,
+      "preserve_errors": true,
+      "preserve_stacktraces": true,
+      "preserve_paths": true
+    },
+    "smart_compact": {
+      "enabled": true,
+      "context_threshold_pct": 85,
+      "preserve_last_turns": 15
+    },
+    "batch_synthesis": {
+      "enabled": true,
+      "min_batch_size": 2
+    },
+    "agent_pipelines": {
+      "enabled": true,
+      "max_reactivations": 3
+    },
+    "subagent_reader": {
+      "enabled": false
+    },
+    "oracle": {
+      "enabled": false
+    },
+    "caveman_agents": {
+      "enabled": false
+    },
+    "docs_compression": {
+      "enabled": false
+    }
+  },
+  "beast": {
+    "label": "Beast",
+    "icon": "🦍",
+    "description": "Maximum savings. Full compression + oracle + caveman agents.",
+    "coach": {
+      "enabled": true,
+      "max_preamble_pct": 10,
+      "check_parallel_tools": true
+    },
+    "task_manifest": {
+      "enabled": true
+    },
+    "model_routing": {
+      "mode": "aggressive",
+      "trivial_keywords": ["list", "show", "print", "what", "which", "where", "format", "read", "count", "ls", "cat", "describe", "find", "search", "grep"]
+    },
+    "compress_output": {
+      "enabled": true,
+      "threshold_lines": 20,
+      "preserve_errors": true,
+      "preserve_stacktraces": true,
+      "preserve_paths": true
+    },
+    "smart_compact": {
+      "enabled": true,
+      "context_threshold_pct": 60,
+      "preserve_last_turns": 8
+    },
+    "batch_synthesis": {
+      "enabled": true,
+      "min_batch_size": 2
+    },
+    "agent_pipelines": {
+      "enabled": true,
+      "max_reactivations": 5
+    },
+    "subagent_reader": {
+      "enabled": true,
+      "threshold_lines": 50
+    },
+    "oracle": {
+      "enabled": true,
+      "flash_timeout_seconds": 5
+    },
+    "caveman_agents": {
+      "enabled": true
+    },
+    "docs_compression": {
+      "enabled": true
+    }
+  }
+}
