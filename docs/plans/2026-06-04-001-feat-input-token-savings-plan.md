@@ -1,7 +1,7 @@
 ---
 title: "feat: Input / tool-output token savings (deterministic-first)"
 type: feat
-status: active
+status: completed
 created: 2026-06-04
 origin: docs/brainstorms/input-token-savings-requirements.md
 depth: standard
