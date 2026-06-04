@@ -32,13 +32,23 @@ existing tiers.
 B-minus (read-range defaulting + grep/glob cap — prevention without the explorer
 agent), C (behavioral coaching), tier-gating, tier-config keys, docs, offline tests.
 
-**Spike resolved (see origin Dependencies):** `tool_response` is a string for
-Read/Grep/Glob, an object for Bash. Wrong-shape `updatedToolOutput` is silently
-ignored (original kept) → string replacement is safe to attempt with no data-loss
-risk. Only live-accept of a string `updatedToolOutput` for Read remains runtime-verifiable.
+**Spike resolved, then CORRECTED by live verification (2026-06-04):** the brainstorm
+spike (from a stale docs example) said Read/Grep/Glob `tool_response` is a string. A
+real Claude Code session proved otherwise:
+- **Read** `tool_response` is a structured **object** `{type:"text", file:{content,
+  filePath, numLines, startLine, totalLines}}` — live-verified: a 300-line Read was
+  replaced with 31 lines via `updatedToolOutput`.
+- **Bash** object `{stdout,stderr,interrupted,isImage}` — live-verified working.
+- **Grep/Glob** shapes **could not be captured** (project `PostToolUse` hooks don't
+  fire for subagent tool calls, and the tools aren't directly drivable in-session).
+  Their string assumption is now untrustworthy → **deferred** (see below). Matcher is
+  `Bash|Read` only until their shapes are captured live.
 
 ### Deferred to Follow-Up Work
 
+- **Grep/Glob compression** — live `tool_response` shapes unverified (see corrected
+  spike above). Needs a session that captures the real payloads, then per-shape
+  handling + tests, before re-adding to the matcher.
 - **`julius-explorer` subagent** (delegation arm of B). ROI uncertain (subagent cost
   vs inline targeted grep); validate with metrics before building. (see origin)
 - **Semantic dedup / cross-session dedup** — only exact in-session dedup is in scope.
