@@ -49,6 +49,26 @@ else
   cp "$PLUGIN_SRC/.claude-plugin/"*.json "$PLUGIN_DST/.claude-plugin/" 2>/dev/null || true
 fi
 
+# 🔧 Fix nesting: if plugin.json ended up in a subdirectory (e.g. julius/julius-plugin/),
+# move everything up one level so Claude Code can find it at the plugin root.
+if [ ! -f "$PLUGIN_DST/plugin.json" ]; then
+  # Find nested plugin.json (one level deep)
+  NESTED=$(find "$PLUGIN_DST" -maxdepth 2 -name "plugin.json" -not -path "$PLUGIN_DST/plugin.json" 2>/dev/null | head -1)
+  if [ -n "$NESTED" ]; then
+    NESTED_DIR=$(dirname "$NESTED")
+    echo "   🔧 Fixing nested install: moving files from $NESTED_DIR to $PLUGIN_DST"
+    # Move visible files/dirs up
+    for item in "$NESTED_DIR"/*; do
+      mv "$item" "$PLUGIN_DST/" 2>/dev/null || true
+    done
+    # Move hidden dirs too (.claude-plugin)
+    for item in "$NESTED_DIR"/.[!.]*; do
+      [ -e "$item" ] && mv "$item" "$PLUGIN_DST/" 2>/dev/null || true
+    done
+    rmdir "$NESTED_DIR" 2>/dev/null || true
+  fi
+fi
+
 chmod +x "$PLUGIN_DST/scripts/"*.sh 2>/dev/null || true
 
 echo "✓ Plugin files copied"
