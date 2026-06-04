@@ -1,64 +1,44 @@
 #!/usr/bin/env bash
-# large-file-guard.sh — PreToolUse hook on Read
-# Blocks Read of large files, suggests julius-reader agent instead.
-# Exit 2 = block. Stdout = feedback to model.
+# large-file-guard.sh — PreToolUse hook on Read.
+# Blocks Read of large files and redirects to the julius-reader agent.
+# PreToolUse stdin is JSON: {tool_name, tool_input:{file_path}, agent_id?, ...}.
+# Exit 2 = block the tool call; stderr is shown to the model.
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-STATE_DIR="${CLAUDE_PLUGIN_DATA:-$(pwd)/.claude/julius}"
+# shellcheck source=../lib/julius-common.sh
+source "$PLUGIN_ROOT/lib/julius-common.sh"
 
-# Read tier
-TIER_FILE="$STATE_DIR/active-tier"
-[ -f "$TIER_FILE" ] || exit 0
-TIER=$(cat "$TIER_FILE")
-CONFIG="$PLUGIN_ROOT/lib/tier-config.json"
-ENABLED=$(jq -r ".\"$TIER\".subagent_reader.enabled // false" "$CONFIG" 2>/dev/null)
-[ "$ENABLED" = "true" ] || exit 0
+TIER=$(julius_tier) || exit 0
+[ "$(julius_config "$TIER" .subagent_reader.enabled false)" = "true" ] || exit 0
+THRESHOLD=$(julius_config "$TIER" .subagent_reader.threshold_lines 999999)
 
-THRESHOLD=$(jq -r ".\"$TIER\".subagent_reader.threshold_lines // 999999" "$CONFIG" 2>/dev/null)
+INPUT=$(julius_stdin)
+[ -n "$INPUT" ] || exit 0
 
-# Get file path from hook env
-FILE_PATH="${CLAUDE_HOOK_TOOL_ARGS:-}"
-if [ -z "$FILE_PATH" ]; then
-  FILE_PATH=$(cat 2>/dev/null || echo "")
-fi
+# Never block reads issued from inside a subagent: the julius-reader agent itself
+# uses Read, and blocking it would deadlock the redirect we are recommending.
+AGENT_ID=$(echo "$INPUT" | jq -r '.agent_id // empty' 2>/dev/null)
+[ -z "$AGENT_ID" ] || exit 0
 
-# If we can't determine the file, let it pass
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 [ -n "$FILE_PATH" ] || exit 0
 
-# Try to extract path from various formats
-# Common: "path/to/file.py" or {"file_path": "..."}
-CLEAN_PATH=$(echo "$FILE_PATH" | jq -r '.file_path // .path // .file // .target // empty' 2>/dev/null || echo "$FILE_PATH" | tr -d '"' | xargs)
-
-# Still no path? try first word
-if [ -z "$CLEAN_PATH" ]; then
-  CLEAN_PATH=$(echo "$FILE_PATH" | awk '{print $1}' | tr -d '"')
+# Resolve relative paths against cwd.
+if [ ! -f "$FILE_PATH" ] && [ -f "$(pwd)/$FILE_PATH" ]; then
+  FILE_PATH="$(pwd)/$FILE_PATH"
 fi
+[ -f "$FILE_PATH" ] || exit 0
 
-[ -n "$CLEAN_PATH" ] || exit 0
-
-# Check file size
-if [ -f "$CLEAN_PATH" ]; then
-  LINES=$(wc -l < "$CLEAN_PATH" 2>/dev/null | tr -d ' ')
-elif [ -f "$(pwd)/$CLEAN_PATH" ]; then
-  LINES=$(wc -l < "$(pwd)/$CLEAN_PATH" 2>/dev/null | tr -d ' ')
-  CLEAN_PATH="$(pwd)/$CLEAN_PATH"
-else
-  # Can't find file, let it pass
-  exit 0
-fi
-
-# Skip if within threshold or couldn't count lines
+LINES=$(wc -l < "$FILE_PATH" 2>/dev/null | tr -d ' ')
 [ -n "$LINES" ] && [ "$LINES" -gt "$THRESHOLD" ] 2>/dev/null || exit 0
 
-# Block the Read and redirect to julius-reader agent
-cat << BLOCK
-[JULIUS] File '$CLEAN_PATH' has $LINES lines (threshold: $THRESHOLD).
-Instead of reading it directly, delegate to the **julius-reader** agent.
-It will return a structured summary with: structure, notable lines, and edit targets.
-
-Usage: delegate this task to julius-reader agent:
-"Read and summarize $CLEAN_PATH. Return JSON with: summary, structure, notable, edit_targets"
+# Block and tell the model what to do instead (stderr is surfaced on exit 2).
+cat >&2 << BLOCK
+[JULIUS] '$FILE_PATH' has $LINES lines (threshold: $THRESHOLD).
+Delegate to the julius-reader agent instead of reading it directly:
+"Read and summarize $FILE_PATH. Return JSON: {summary, structure, notable, edit_targets}"
+If you need exact bytes to Edit, read a targeted range with offset/limit.
 BLOCK
 
 exit 2

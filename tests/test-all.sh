@@ -38,7 +38,7 @@ done
 
 # 3. hooks.json
 echo "[hooks.json]"
-for hook in SessionStart UserPromptSubmit PreToolUse PostToolUse PostToolBatch PreCompact Stop TeammateIdle TaskCreated TaskCompleted; do
+for hook in UserPromptSubmit PreToolUse PostToolUse PostToolBatch Stop TeammateIdle TaskCreated TaskCompleted; do
   if jq -e ".hooks.\"$hook\"" "$ROOT/hooks/hooks.json" >/dev/null 2>&1; then
     green "Hook '$hook' registered"
   else
@@ -48,7 +48,7 @@ done
 
 # 4. All scripts exist
 echo "[scripts/]"
-for script in flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh smart-compact.sh large-file-guard.sh batch-synthesizer.sh docs-compressor.sh oracle-preprocess.sh keep-busy.sh; do
+for script in flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh; do
   if [ -f "$ROOT/scripts/$script" ]; then
     green "Script '$script' exists"
   else
@@ -84,6 +84,14 @@ for script in "$ROOT/scripts/"*.sh; do
   fi
 done
 
+# 7b. Shared lib
+echo "[lib/]"
+if [ -f "$ROOT/lib/julius-common.sh" ]; then
+  green "julius-common.sh exists"
+else
+  red "julius-common.sh missing"
+fi
+
 # 8. Marketplace
 echo "[marketplace]"
 if jq -e '.name == "julius-plugin"' "$ROOT/.claude-plugin/marketplace.json" >/dev/null 2>&1; then
@@ -94,7 +102,7 @@ fi
 
 # 9. package.json
 echo "[package.json]"
-if jq -e '.bin."julius-plugin" == "./bin/install.sh"' "$ROOT/package.json" >/dev/null 2>&1; then
+if jq -e '.bin."julius-plugin" | test("bin/install.sh$")' "$ROOT/package.json" >/dev/null 2>&1; then
   green "npm bin points to install.sh"
 else
   red "npm bin missing or wrong"
@@ -112,6 +120,14 @@ else
 fi
 popd >/dev/null
 rm -rf "$TMPDIR"
+
+# 11. Behavioral hook tests (I/O contract)
+echo "[hook behavior]"
+if bash "$ROOT/tests/test-hooks.sh" >/dev/null 2>&1; then
+  green "test-hooks.sh passed"
+else
+  red "test-hooks.sh failed (run it directly for details)"
+fi
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

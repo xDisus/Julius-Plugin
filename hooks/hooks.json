@@ -1,16 +1,5 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/docs-compressor.sh\""
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "matcher": "",
@@ -35,7 +24,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Read|Grep|Glob",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
@@ -51,17 +40,6 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/batch-synthesizer.sh\""
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/smart-compact.sh\""
           }
         ]
       }

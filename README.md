@@ -2,15 +2,20 @@
 
 > *"Every token counts." — Julius Rock, 1987*
 
-Julius is a Claude Code plugin that cuts token consumption by **up to 95%** by combining three complementary tools:
+Julius is a Claude Code plugin that reduces token consumption by orchestrating
+compression at the right points in the session lifecycle. It pairs well with two
+external tools:
 
-| Tool | What it compresses | Savings |
-|------|-------------------|:-------:|
-| **[context-mode](https://github.com/cc-shared/context-mode)** | Tool output (60-80% of input) | **90-98%** |
-| **[caveman](https://github.com/JuliusBrussee/caveman)** | Model output (20-30% of cost) | **65-75%** |
-| **Julius hooks** | Preprocessing, routing, compaction | **10-30%** |
+| Tool | What it compresses |
+|------|-------------------|
+| **[context-mode](https://github.com/cc-shared/context-mode)** | Tool output (often 60-80% of input) |
+| **[caveman](https://github.com/JuliusBrussee/caveman)** | Model output |
+| **Julius hooks** | Preprocessing, routing, large-file redirection, Bash-output compression |
 
-Together they form a compression stack — Julius is the orchestrator that activates them at the right moments via lifecycle hooks.
+> **On the savings numbers:** the percentages below are **rough estimates / targets**,
+> not measured benchmarks. Actual savings depend heavily on workload. The metrics hook
+> (`metrics-stop.sh`) records **real** per-turn token usage and cost; its "savings" figure
+> is a heuristic tier multiplier, clearly labelled as an estimate.
 
 ## Quick Install
 
@@ -35,100 +40,94 @@ npx julius-plugin
 
 ## Tiers
 
-Julius orchestrates 3 tools across 3 tiers — you choose the trade-off:
+| Tier | Est. savings | What's active | Risk |
+|------|:-----------:|---------------|------|
+| **Normal** ✅ | ~10% | Coach, task manifest, haiku routing | None |
+| **Pro** ⚠️ | ~50-80%* | + Bash output compression, batch synthesis, agent pipelines | Low |
+| **Beast** 🦍 | ~80-95%* | + large-file guard, context oracle, caveman agents | Medium |
 
-| Tier | Total Savings | Tools Active | Risk |
-|------|:------------:|--------------|------|
-| **Normal** ✅ | ~10% | Julius hooks only (coach, manifest, haiku routing) | None |
-| **Pro** ⚠️ | ~80% | Julius + **context-mode** (tool output sandboxed) | Low (context-mode is proven) |
-| **Beast** 🦍 | ~95% | Julius + context-mode + **caveman** (output compressed) | Medium (caveman rewrites model output) |
-
-### Where the savings come from
-
-```
-Normal:  Julius hooks     → 10%  (cache optimization, structured output, task pruning)
-Pro:     + context-mode   → 80%  (tool output drops from 60K to ~2K tokens)
-Beast:   + caveman        → 95%  (model output drops from 2K to ~500 tokens)
-```
-
-**Pro** alone already saves ~80% because tool output is the biggest token hog.  
-**Beast** adds caveman to compress what the model *says*, pushing past 90%.
+\* Estimates. The biggest real savings come from pairing with **context-mode** (tool
+output) and **caveman** (model output); Julius hooks alone contribute the smaller share.
 
 ---
 
-## All 11 Features
+## Features
 
-### Phase 1 — Normal (always on)
+### Normal (always on)
 
-| # | Feature | Mechanism | What it does |
-|---|---------|-----------|-------------|
-| 1 | **Turn Coach** 🏋️ | `Stop` hook | Analyzes each turn for preamble waste (>20%). Injects `[JULIUS COACH]` if model uses too many "I'll" / "Let me" / "First" etc. |
-| 2 | **Task Manifest** ✅ | `TaskCreated` + `TaskCompleted` | Maintains compressed `[TASKS] 2/6 done. Active: auth middleware` — no verbose task lists |
-| 3 | **Haiku Routing** 🎯 | Agent `tier-router.md` | Trivial tasks (list, search, format, test) delegated to haiku agents. Frees main model for real work |
+| Feature | Mechanism | What it does |
+|---------|-----------|-------------|
+| **Turn Coach** 🏋️ | `Stop` hook | Reads the last assistant turn from the transcript; flags wasteful planning prose alongside tool calls. Advisory only (never blocks). |
+| **Task Manifest** ✅ | `TaskCreated` + `TaskCompleted` | Maintains a compact `[TASKS] 2/6 done. Active: …` digest. |
+| **Haiku Routing** 🎯 | Agent `tier-router.md` | Trivial tasks delegated to haiku workers, freeing the main model. |
 
-### Phase 2 — Compression Engine (Pro+)
+### Pro+
 
-| # | Feature | Mechanism | Threshold |
-|---|---------|-----------|-----------|
-| 4 | **Output Compression** ✂️ | `PostToolUse` on Bash/Read/Grep/Glob | Pro: >100 lines → flash summary. Beast: >20. Preserves errors/stacktraces |
-| 5 | **Smart Compaction** 🗜️ | `PreCompact` | Blocks native compaction. Injects decision-focused summary. Pro: preserves last 15 turns. Beast: 8 |
-| 6 | **Batch Synthesis** 🔗 | `PostToolBatch` | Cross-references parallel outputs. Detects imports, shared entities, relationships |
-| 7 | **Subagent Reader** 📖 | `PreToolUse` on Read + Agent `julius-reader.md` | Beast: >50 lines → blocks Read, delegates to haiku reader. Returns JSON `{summary, structure, edit_targets}` |
+| Feature | Mechanism | Threshold |
+|---------|-----------|-----------|
+| **Bash Output Compression** ✂️ | `PostToolUse` (Bash only) | Pro: >150 lines, Beast: >80. Replaces stdout via `updatedToolOutput`, preserving errors/paths. On any failure the original output is kept (no data loss). |
+| **Batch Synthesis** 🔗 | `PostToolBatch` | Cross-references parallel tool outputs into one dense synthesis. |
+| **Agent Pipelines** 🔄 | `TeammateIdle` | When a teammate idles with pending work (active tasks / untested changes), redirects it. Capped by `max_reactivations`. |
 
-### Phase 3 — Beast Mode (Beast only)
+### Beast only
 
-| # | Feature | Mechanism | What it does |
-|---|---------|-----------|-------------|
-| 8 | **Compressed Workers** 🤖 | Agents: julius-reader, julius-executor, julius-researcher | Ultra-compressed prompts (caveman-style). No preamble. Delegated by main agent for mechanical tasks. Pairs with external [caveman](https://github.com/JuliusBrussee/caveman) tool |
-| 9 | **Docs Compression** 📄 | `SessionStart` hook | Compresses CLAUDE.md/AGENTS.md into caveman shorthand. Cached with hash |
-| 10 | **Context Oracle** 🔮 | `UserPromptSubmit` hook | Flash pre-processes user prompt + project index. Returns `TARGETS: auth.py:145. APPROACH: check JWT. WATCH: Redis timeout` |
-| 11 | **Agent Pipelines** 🔄 | `TeammateIdle` hook | Keeps subagents alive. Detects untested changes, pending tasks, reactivates with directed work |
+| Feature | Mechanism | What it does |
+|---------|-----------|-------------|
+| **Large-File Guard** 📖 | `PreToolUse` on Read + `julius-reader` | >50-line reads are blocked and redirected to the haiku reader (returns a JSON summary). Skipped inside subagents so the reader itself can read. |
+| **Context Oracle** 🔮 | `UserPromptSubmit` | Flash pre-processes non-trivial prompts into `TARGETS / APPROACH / WATCH`. Gated by prompt length and cached by content hash to avoid repeat calls. |
+| **Compressed Workers** 🤖 | `julius-reader`, `julius-executor`, `julius-researcher` | Ultra-compressed agent prompts for mechanical tasks. Pairs with the external [caveman](https://github.com/JuliusBrussee/caveman) tool. |
+
+> **Note on cost:** the compression/oracle/synthesis hooks call the Anthropic Haiku API
+> on the critical path. They are gated (size thresholds, prompt-length gate, caching) so
+> trivial operations don't pay a network round-trip. Without `ANTHROPIC_API_KEY` these
+> hooks degrade gracefully — they no-op and the original output/prompt is preserved.
 
 ---
 
 ## Architecture
 
-### Hooks (10 lifecycle events)
+### Hooks (8 lifecycle events)
 
 ```
-SessionStart     → docs-compressor.sh      (Beast: compress project docs)
 UserPromptSubmit → oracle-preprocess.sh    (Beast: flash pre-processes prompt)
-  ↓
-PreToolUse Read  → large-file-guard.sh      (Beast: redirect large reads)
-PostToolUse      → compress-output.sh       (Pro+: summarize tool outputs)
-PostToolBatch    → batch-synthesizer.sh     (Pro+: cross-reference batch)
-  ↓
-PreCompact       → smart-compact.sh         (Pro+: custom compaction)
-Stop             → turn-coach.sh            (All: efficiency analysis)
-TeammateIdle     → keep-busy.sh             (Pro+: keep agents working)
-TaskCreated      → task-manifest.sh         (All: compressed task list)
-TaskCompleted    → task-manifest.sh         (All: mark done)
+PreToolUse Read  → large-file-guard.sh     (Beast: redirect large reads)
+PostToolUse Bash → compress-output.sh      (Pro+: replace large Bash stdout)
+PostToolBatch    → batch-synthesizer.sh    (Pro+: cross-reference batch)
+Stop             → turn-coach.sh           (All: efficiency coaching)
+                 → metrics-stop.sh         (All: real token/cost metrics)
+TeammateIdle     → keep-busy.sh            (Pro+: keep agents working)
+TaskCreated      → task-manifest.sh        (All: compressed task list)
+TaskCompleted    → task-manifest.sh        (All: mark done)
 ```
+
+All hooks read the documented JSON event on **stdin** and respond via the correct
+mechanism for their event (exit code, `additionalContext`, or `updatedToolOutput`).
 
 ### Agents (4 haiku agents)
 
-| Agent | Purpose | Tools | Size |
-|-------|---------|-------|------|
-| `tier-router` | Generic trivial tasks | Read, Bash, Glob, Grep | ~250 tokens |
-| `julius-reader` | Read files, return JSON summary | Read, Grep, Glob | ~200 tokens |
-| `julius-executor` | Run tests, lint, format, git ops | Bash, Read, Grep | ~180 tokens |
-| `julius-researcher` | Web search & summarize | WebSearch, WebFetch | ~160 tokens |
+| Agent | Purpose | Tools |
+|-------|---------|-------|
+| `tier-router` | Generic trivial tasks | Read, Bash, Glob, Grep |
+| `julius-reader` | Read files, return JSON summary | Read, Grep, Glob |
+| `julius-executor` | Run tests, lint, format, git ops | Bash, Read, Grep |
+| `julius-researcher` | Web search & summarize | WebSearch, WebFetch |
 
-### Scripts (11 bash scripts)
+### Scripts
 
-| Script | Lines | Dependencies |
-|--------|:----:|-------------|
-| `flash-client.sh` | 82 | `curl`, `jq`, `ANTHROPIC_API_KEY` |
-| `tier-setter.sh` | 42 | `jq` |
-| `turn-coach.sh` | 104 | `jq` |
-| `task-manifest.sh` | 121 | `jq` |
-| `compress-output.sh` | 78 | `flash-client.sh` |
-| `smart-compact.sh` | 87 | `flash-client.sh` |
-| `large-file-guard.sh` | 75 | — |
-| `batch-synthesizer.sh` | 78 | `flash-client.sh` |
-| `docs-compressor.sh` | 82 | `flash-client.sh` |
-| `oracle-preprocess.sh` | 80 | `flash-client.sh` |
-| `keep-busy.sh` | 109 | `jq`, `git` |
+| Script | Role | Dependencies |
+|--------|------|-------------|
+| `lib/julius-common.sh` | Shared helpers (state dir, tier, config, portable md5) — sourced by all hooks | `jq` |
+| `flash-client.sh` | Anthropic Haiku client | `curl`, `jq`, `ANTHROPIC_API_KEY` |
+| `tier-setter.sh` | Writes active tier | `jq` |
+| `turn-coach.sh` | Stop hook | `jq` |
+| `metrics-stop.sh` | Stop hook (metrics) | `jq`, `bc` |
+| `task-manifest.sh` | Task hooks | `jq` |
+| `compress-output.sh` | PostToolUse Bash hook | `flash-client.sh` |
+| `large-file-guard.sh` | PreToolUse Read hook | `jq` |
+| `batch-synthesizer.sh` | PostToolBatch hook | `flash-client.sh` |
+| `oracle-preprocess.sh` | UserPromptSubmit hook | `flash-client.sh` |
+| `keep-busy.sh` | TeammateIdle hook | `jq`, `git` |
+| `julius-doctor.sh` | Diagnostics | `jq` |
 
 ---
 
@@ -143,30 +142,22 @@ Julius-Plugin/
 ├── bin/
 │   └── install.sh                # npx entrypoint
 ├── commands/
-│   └── julius.md                 # /julius normal|pro|beast
+│   ├── julius.md                 # /julius normal|pro|beast
+│   └── julius-doctor.md          # /julius-doctor
 ├── agents/
-│   ├── tier-router.md            # F3: generic haiku worker
-│   ├── julius-reader.md         # F1: file analyst
-│   ├── julius-executor.md       # F1: test/lint/git worker
-│   └── julius-researcher.md     # F1: web researcher
+│   ├── tier-router.md            # generic haiku worker
+│   ├── julius-reader.md          # file analyst
+│   ├── julius-executor.md        # test/lint/git worker
+│   └── julius-researcher.md      # web researcher
 ├── hooks/
-│   └── hooks.json                # 10 lifecycle hooks
-├── scripts/
-│   ├── flash-client.sh           # Shared: Anthropic Haiku API
-│   ├── tier-setter.sh            # Writes active tier
-│   ├── turn-coach.sh             # Stop hook
-│   ├── task-manifest.sh          # Task hooks
-│   ├── compress-output.sh        # PostToolUse hook
-│   ├── smart-compact.sh          # PreCompact hook
-│   ├── large-file-guard.sh       # PreToolUse Read hook
-│   ├── batch-synthesizer.sh      # PostToolBatch hook
-│   ├── docs-compressor.sh        # SessionStart hook
-│   ├── oracle-preprocess.sh      # UserPromptSubmit hook
-│   └── keep-busy.sh              # TeammateIdle hook
+│   └── hooks.json                # 8 lifecycle hooks
+├── scripts/                      # hook implementations (see table above)
 ├── lib/
-│   └── tier-config.json          # Thresholds per tier
+│   ├── julius-common.sh          # shared helpers, sourced by hooks
+│   └── tier-config.json          # thresholds per tier
 ├── tests/
-│   └── test-all.sh               # Smoke tests
+│   ├── test-all.sh               # smoke tests (existence/parse + behavior)
+│   └── test-hooks.sh             # behavioral hook I/O tests with fixtures
 └── docs/
     ├── requirements.md
     └── plan.md
@@ -177,18 +168,19 @@ Julius-Plugin/
 ## Requirements
 
 - **Claude Code:** `npm install -g @anthropic-ai/claude-code`
-- **Dependencies:** `jq`, `curl` (standard on macOS/Linux)
-- **API key:** `ANTHROPIC_API_KEY` (for flash LLM in Pro/Beast). Auto-detected from `~/.claude/.env`
+- **Dependencies:** `jq`, `curl`, and `bc` (for metrics). Portable md5 falls back across
+  `md5sum` (Linux) / `md5` (macOS).
+- **API key:** `ANTHROPIC_API_KEY` (for the flash LLM in Pro/Beast). Auto-detected from
+  `~/.claude/.env`. Without it, flash-backed hooks no-op safely.
 
 ## Development
 
 ```bash
 git clone https://github.com/xDisus/Julius-Plugin.git
 cd Julius-Plugin
-# Test locally
-bash tests/test-all.sh
-# Publish to npm (requires npm login)
-npm publish
+bash tests/test-all.sh     # full suite (includes behavioral hook tests)
+bash tests/test-hooks.sh   # hook I/O contract tests only
+npm publish                # requires npm login
 ```
 
 ## License

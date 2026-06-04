@@ -56,7 +56,7 @@ for a in "tier-router" "julius-reader" "julius-executor" "julius-researcher"; do
   [ -f "$ROOT/agents/$a.md" ] && ok "Agent: $a" || fail "Agent: $a missing"
 done
 
-SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh smart-compact.sh large-file-guard.sh batch-synthesizer.sh docs-compressor.sh oracle-preprocess.sh keep-busy.sh julius-doctor.sh"
+SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh"
 for s in $SCRIPTS; do
   if [ -f "$ROOT/scripts/$s" ]; then
     [ -x "$ROOT/scripts/$s" ] && ok "${s%.sh} — executable" || warn "${s%.sh} — NOT executable"
@@ -71,7 +71,7 @@ printf "\033${BOLD}═══ HOOKS VALIDATION ═══\033${NC}\n"
 
 HOOKS="$ROOT/hooks/hooks.json"
 if [ -f "$HOOKS" ]; then
-  REQUIRED="SessionStart UserPromptSubmit PreToolUse PostToolUse PostToolBatch PreCompact Stop TeammateIdle TaskCreated TaskCompleted"
+  REQUIRED="UserPromptSubmit PreToolUse PostToolUse PostToolBatch Stop TeammateIdle TaskCreated TaskCompleted"
   for h in $REQUIRED; do
     if grep -q "\"$h\"" "$HOOKS" 2>/dev/null; then
       ok "Hook: $h"

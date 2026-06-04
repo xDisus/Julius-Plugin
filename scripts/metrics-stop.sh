@@ -1,15 +1,17 @@
 #!/bin/bash
-# metrics-stop.sh — Julius token savings metrics (Stop hook)
-# Reads transcript JSONL, computes actual vs baseline cost, logs cumulative savings.
+# metrics-stop.sh — Julius token metrics (Stop hook)
+# Reads transcript JSONL, records REAL per-turn token usage + cost, and a clearly
+# heuristic savings ESTIMATE. The estimate is a rough tier multiplier, not a measured
+# baseline — treat it as indicative only.
 #
 # Stop hook stdin JSON:
 #   { "session_id": "...", "transcript_path": "/path/session.jsonl", "cwd": "...", "stop_reason": "end_turn" }
-#
-# Pricing baseline (Claude Sonnet $3/$15 per 1M input/output — unoptimized):
-#   Julius savings come from: tool output compression, large-file guard, oracle preprocess,
-#   docs compression, context-mode synergy, and tier-specific aggressiveness.
 
 set -euo pipefail
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# shellcheck source=../lib/julius-common.sh
+source "$PLUGIN_ROOT/lib/julius-common.sh"
 
 METRICS_DIR="${HOME}/.julius/metrics"
 METRICS_FILE="${METRICS_DIR}/cumulative.json"
@@ -18,30 +20,20 @@ LOG_FILE="${METRICS_DIR}/metrics.log"
 mkdir -p "${METRICS_DIR}"
 
 # ─── Parse stdin ───────────────────────────────────────────────
+# NOTE: the Stop event has no `stop_reason` field (only common fields + stop_hook_active),
+# so there is no end_turn gate to apply — Stop fires once when Claude finishes the turn.
 INPUT=$(cat)
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
-STOP_REASON=$(echo "$INPUT" | jq -r '.stop_reason // "unknown"')
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
 PROJECT=$(basename "$CWD" 2>/dev/null || echo "unknown")
 
-# Only count on end_turn (skip tool_use — those trigger intermediate stops)
-if [ "$STOP_REASON" != "end_turn" ] && [ "$STOP_REASON" != "null" ]; then
-    exit 0
-fi
+# ─── Get active tier (from the unified state dir the tier setter writes) ──────
+TIER=$(julius_tier 2>/dev/null || echo "normal")
+[ -n "$TIER" ] || TIER="normal"
 
-# ─── Get active tier ───────────────────────────────────────────
-TIER_FILE="${HOME}/.julius/tier"
-TIER="normal"
-if [ -f "$TIER_FILE" ]; then
-    TIER=$(cat "$TIER_FILE")
-fi
-
-# Tier multiplier: how much LESS input tokens the Julius stack uses vs raw Claude Code
-# These reflect the FULL stack (Julius + context-mode + caveman):
-# Normal: ~10% (Julius hooks only — cache, structured output, pruning)
-# Pro:    ~80% (+ context-mode sandboxes tool output — 60K→2K tokens per call)
-# Beast:  ~95% (+ caveman compresses model output — 2K→500 tokens)
+# HEURISTIC estimate only — a tier multiplier, NOT a measured baseline. Used to give a
+# ballpark "savings" figure; do not treat as ground truth.
 case "$TIER" in
     beast)  SAVINGS_MULTIPLIER=0.95 ;;
     pro)    SAVINGS_MULTIPLIER=0.80 ;;

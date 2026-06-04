@@ -1,68 +1,64 @@
 #!/usr/bin/env bash
-# oracle-preprocess.sh — UserPromptSubmit hook
-# Before each turn, runs flash LLM on the user prompt + project index.
-# Returns a dense "dossier" injected as prefix: [ORACLE] targets, approach, watch.
+# oracle-preprocess.sh — UserPromptSubmit hook.
+# Runs a flash pass over the user prompt + a small project index and injects a
+# dense dossier (TARGETS/APPROACH/WATCH) via additionalContext.
+#
+# stdin is JSON: {prompt, cwd, ...}. Output is JSON hookSpecificOutput.additionalContext.
+# Gated hard: only fires on non-trivial prompts, and caches by prompt+index hash so
+# repeated/identical prompts don't pay the network round-trip again.
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-STATE_DIR="${CLAUDE_PLUGIN_DATA:-$(pwd)/.claude/julius}"
-FLASH="$PLUGIN_ROOT/scripts/flash-client.sh"
+# shellcheck source=../lib/julius-common.sh
+source "$PLUGIN_ROOT/lib/julius-common.sh"
+FLASH="${JULIUS_FLASH_BIN:-$PLUGIN_ROOT/scripts/flash-client.sh}"
 
-# Read tier
-TIER_FILE="$STATE_DIR/active-tier"
-[ -f "$TIER_FILE" ] || exit 0
-TIER=$(cat "$TIER_FILE")
-CONFIG="$PLUGIN_ROOT/lib/tier-config.json"
-ENABLED=$(jq -r ".\"$TIER\".oracle.enabled // false" "$CONFIG" 2>/dev/null)
-[ "$ENABLED" = "true" ] || exit 0
+TIER=$(julius_tier) || exit 0
+[ "$(julius_config "$TIER" .oracle.enabled false)" = "true" ] || exit 0
+TIMEOUT=$(julius_config "$TIER" .oracle.flash_timeout_seconds 5)
+MIN_WORDS=$(julius_config "$TIER" .oracle.min_prompt_words 6)
 
-TIMEOUT=$(jq -r ".\"$TIER\".oracle.flash_timeout_seconds // 5" "$CONFIG" 2>/dev/null)
-
-# Read user prompt from stdin
-PROMPT=""
-if [ ! -t 0 ]; then
-  PROMPT=$(cat)
-fi
-
+INPUT=$(julius_stdin)
+[ -n "$INPUT" ] || exit 0
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 [ -n "$PROMPT" ] || exit 0
 
-# Build quick project index — just file tree and recent git log
-CWD="$(pwd)"
-PROJECT_INDEX=""
-PROJECT_INDEX="DIRS: $(find "$CWD" -maxdepth 2 -type d -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -20 | paste -sd ' ')"
-PROJECT_INDEX="$PROJECT_INDEX
-
-FILES: $(find "$CWD" -maxdepth 3 -type f -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.go' -o -name '*.rs' 2>/dev/null | head -15 | sed "s|$CWD/||" | paste -sd ' ')"
-
+# Gate: skip trivial/short prompts and slash commands — the dossier isn't worth a call.
+case "$PROMPT" in /*) exit 0 ;; esac
+WORDS=$(printf '%s' "$PROMPT" | wc -w | tr -d ' ')
+[ "$WORDS" -ge "$MIN_WORDS" ] 2>/dev/null || exit 0
 [ -x "$FLASH" ] || exit 0
 
-# Build oracle prompt
-ORACLE_INPUT="You are a task router for a coding agent. Given a prompt and project index, identify:
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null); [ -n "$CWD" ] || CWD="$(pwd)"
 
-1. TARGETS: which files are relevant (max 3, with line hints if possible)
-2. APPROACH: the likely fix or implementation in 1 sentence
-3. WATCH: potential pitfalls or dependencies (1 line)
+DIRS=$(find "$CWD" -maxdepth 2 -type d -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -20 | paste -sd ' ' -)
+FILES=$(find "$CWD" -maxdepth 3 \( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.go' -o -name '*.rs' \) 2>/dev/null | head -15 | sed "s|$CWD/||" | paste -sd ' ' -)
+INDEX="DIRS: $DIRS
+FILES: $FILES"
 
-Return in 150 tokens max, format:
-TARGETS: file1.py:line, file2.py:line
+# Cache by content hash.
+CACHE_DIR="$(julius_state_dir)/oracle-cache"; mkdir -p "$CACHE_DIR"
+HASH=$(printf '%s\n%s' "$PROMPT" "$INDEX" | julius_md5)
+CACHE_FILE="$CACHE_DIR/$HASH"
+if [ -f "$CACHE_FILE" ]; then
+  RESULT=$(cat "$CACHE_FILE")
+else
+  ORACLE_INPUT="You are a task router for a coding agent. From the prompt and project index, return <=120 tokens, exactly:
+TARGETS: file:line, file:line (max 3)
 APPROACH: one sentence
 WATCH: one sentence
 
---- User prompt ---
+--- prompt ---
 $PROMPT
 
---- Project index ---
-$PROJECT_INDEX"
-
-# Call flash with tight timeout
-RESULT=$(echo "$ORACLE_INPUT" | "$FLASH" 2>/dev/null) || RESULT=""
-
-if [ -n "$RESULT" ] && [ "${RESULT#ERROR}" = "$RESULT" ]; then
-  # Inject as prefix to the user prompt
-  echo ""
-  echo "[ORACLE]"
-  echo "$RESULT"
-  echo ""
+--- index ---
+$INDEX"
+  RESULT=$(printf '%s' "$ORACLE_INPUT" | JULIUS_FLASH_TIMEOUT="$TIMEOUT" JULIUS_FLASH_MAX_TOKENS=200 "$FLASH" 2>/dev/null) || RESULT=""
+  [ -n "$RESULT" ] && [ "${RESULT#ERROR}" = "$RESULT" ] && printf '%s' "$RESULT" > "$CACHE_FILE"
 fi
 
+[ -n "$RESULT" ] && [ "${RESULT#ERROR}" = "$RESULT" ] || exit 0
+
+jq -n --arg ctx "[ORACLE]
+$RESULT" '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}}'
 exit 0
