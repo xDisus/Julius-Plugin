@@ -110,13 +110,40 @@ export JULIUS_FLASH_BIN="$STUB"
 
 set_tier beast
 
-# compress-output: must emit updatedToolOutput with the stub text.
+# compress-output Bash: deterministic-first — shrinks WITHOUT flash (stub would be a tell).
 run compress-output.sh "$(jq -n --arg o "$BIGOUT" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"x"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')"
-if [ "$RC" -eq 0 ] && echo "$OUT" | jq -e '.hookSpecificOutput.updatedToolOutput.stdout=="STUBBED_SUMMARY_LINE" and .hookSpecificOutput.updatedToolOutput.isImage==false' >/dev/null 2>&1; then
-  ok "compress-output emits correctly-shaped updatedToolOutput (Bash)"
+DET_STDOUT=$(echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput.stdout // empty' 2>/dev/null)
+DET_LINES=$(printf '%s\n' "$DET_STDOUT" | wc -l | tr -d ' ')
+if [ "$RC" -eq 0 ] && echo "$OUT" | jq -e '.hookSpecificOutput.updatedToolOutput.isImage==false' >/dev/null 2>&1 \
+   && [ -n "$DET_STDOUT" ] && [ "$DET_LINES" -lt 300 ] && printf '%s' "$DET_STDOUT" | grep -q "elided" \
+   && [ "$DET_STDOUT" != "STUBBED_SUMMARY_LINE" ]; then
+  ok "compress-output Bash: deterministic shrink, valid shape, no flash needed"
 else
-  bad "compress-output happy path (rc=$RC, out=$OUT)"
+  bad "compress-output deterministic path (rc=$RC, lines=$DET_LINES)"
 fi
+
+# Error lines survive deterministic Bash compression.
+ERROUT=$(printf 'start\n%s\nERROR: kaboom at x.py:9\n%s\nend\n' "$(seq 1 150)" "$(seq 1 150)")
+run compress-output.sh "$(jq -n --arg o "$ERROUT" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"x"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')"
+echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput.stdout' 2>/dev/null | grep -q "ERROR: kaboom at x.py:9" \
+  && ok "compress-output preserves error lines through compression" || bad "compress-output dropped error line"
+
+# Flash fallback fires only on Beast when deterministic is still over budget.
+FCFG="$TMP/flash-cfg.json"
+jq -n '{beast:{compress_output:{enabled:true,threshold_lines:5,head_lines:50,tail_lines:50,flash_fallback_lines:10}}}' > "$FCFG"
+FF_INPUT=$(jq -n --arg o "$BIGOUT" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"x"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')
+OUT=$(JULIUS_CONFIG="$FCFG" JULIUS_FLASH_BIN="$STUB" bash -c 'printf "%s" "$1" | "$2/compress-output.sh"' _ "$FF_INPUT" "$SCRIPTS" 2>/dev/null)
+echo "$OUT" | jq -e '.hookSpecificOutput.updatedToolOutput.stdout=="STUBBED_SUMMARY_LINE"' >/dev/null 2>&1 \
+  && ok "compress-output Beast flash fallback fires when over budget" || bad "flash fallback path (out=$OUT)"
+
+# Non-beast never invokes flash even over budget (flash bin would fail).
+PCFG="$TMP/pro-cfg.json"
+jq -n '{pro:{compress_output:{enabled:true,threshold_lines:5,head_lines:50,tail_lines:50,flash_fallback_lines:10}}}' > "$PCFG"
+printf '%s' "pro" > "$JULIUS_STATE_DIR/active-tier"
+OUT=$(JULIUS_CONFIG="$PCFG" JULIUS_FLASH_BIN="/bin/false" bash -c 'printf "%s" "$1" | "$2/compress-output.sh"' _ "$FF_INPUT" "$SCRIPTS" 2>/dev/null); RC=$?
+[ "$RC" -eq 0 ] && echo "$OUT" | jq -e '.hookSpecificOutput.updatedToolOutput.stdout' >/dev/null 2>&1 \
+  && ok "compress-output Pro stays deterministic (no flash)" || bad "pro flash-gate (rc=$RC)"
+set_tier beast
 
 # oracle-preprocess: non-trivial prompt → additionalContext with [ORACLE].
 # Use a stable cwd whose contents don't change between calls (the project index is

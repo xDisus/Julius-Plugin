@@ -5,7 +5,8 @@
 
 # Plugin root: prefer the env var Claude Code sets, else derive from this file's location.
 JULIUS_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-JULIUS_CONFIG="$JULIUS_PLUGIN_ROOT/lib/tier-config.json"
+# Honor a pre-set JULIUS_CONFIG (lets tests point at a temp tier-config); else default.
+JULIUS_CONFIG="${JULIUS_CONFIG:-$JULIUS_PLUGIN_ROOT/lib/tier-config.json}"
 
 # Resolve the project state dir consistently across ALL hooks and the tier setter.
 # Priority: explicit override -> Claude Code project dir -> cwd. Coupling everything
