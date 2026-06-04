@@ -146,35 +146,25 @@ OUT=$(JULIUS_CONFIG="$PCFG" JULIUS_FLASH_BIN="/bin/false" bash -c 'printf "%s" "
   && ok "compress-output Pro stays deterministic (no flash)" || bad "pro flash-gate (rc=$RC)"
 set_tier beast
 
-# U3: Read/Grep/Glob deterministic compression (string-shaped updatedToolOutput).
-# Distinct inputs per tool so the dedup feature (on in real config) can't cross-trip them.
+# U3: Read deterministic compression — REAL object shape {type,file:{content,...}},
+# live-verified 2026-06-04. (Grep/Glob deferred: their live shapes are unverified.)
 rm -rf "$JULIUS_STATE_DIR/dedup"
-READBIG=$(seq 1 300)
-run compress-output.sh "$(jq -n --arg t "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Read",tool_input:{file_path:"big.py"},tool_response:$t}')"
-if [ "$RC" -eq 0 ] && echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
-   && echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' | grep -q "elided"; then
-  ok "compress-output Read: string updatedToolOutput, shrank"
+READBIG=$(seq 1 300 | awk '{print "line "$1}')
+RDIN=$(jq -n --arg c "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Read",tool_input:{file_path:"/tmp/big.py"},tool_response:{type:"text",file:{filePath:"/tmp/big.py",content:$c,numLines:300,startLine:1,totalLines:300}}}')
+run compress-output.sh "$RDIN"
+if [ "$RC" -eq 0 ] \
+   && echo "$OUT" | jq -e '.hookSpecificOutput.updatedToolOutput.file.filePath=="/tmp/big.py"' >/dev/null 2>&1 \
+   && echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput.file.content' | grep -q "elided" \
+   && [ "$(echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput.file.numLines')" -lt 300 ] 2>/dev/null; then
+  ok "compress-output Read: object shape, file.content compressed, path + structure preserved"
 else
-  bad "compress-output Read path (rc=$RC, out=$OUT)"
+  bad "compress-output Read object (rc=$RC, out=$(echo "$OUT" | head -c 200))"
 fi
 
-GREPBIG=$(seq 2000 2300)
-run compress-output.sh "$(jq -n --arg t "$GREPBIG" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"content"},tool_response:$t}')"
-echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
-  && ok "compress-output Grep content: line-truncated string" || bad "grep content (out=$OUT)"
-
-FILELIST=$(for i in $(seq 1 200); do echo "src/file_$i.py"; done)
-run compress-output.sh "$(jq -n --arg t "$FILELIST" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"files_with_matches"},tool_response:$t}')"
-echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
-  && ok "compress-output Grep files_with_matches: capped list" || bad "grep files cap (out=$OUT)"
-
-run compress-output.sh "$(jq -n '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"count"},tool_response:"42"}')"
-[ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "compress-output Grep count: left untouched" || bad "grep count (out=$OUT)"
-
-GLOBLIST=$(for i in $(seq 1 200); do echo "lib/mod_$i.py"; done)
-run compress-output.sh "$(jq -n --arg t "$GLOBLIST" '{hook_event_name:"PostToolUse",tool_name:"Glob",tool_input:{pattern:"**/*.py"},tool_response:$t}')"
-echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
-  && ok "compress-output Glob: capped list" || bad "glob cap (out=$OUT)"
+# Read below threshold → untouched.
+RDSMALL=$(jq -n --arg c "$(seq 1 5)" '{hook_event_name:"PostToolUse",tool_name:"Read",tool_input:{file_path:"s.py"},tool_response:{type:"text",file:{filePath:"s.py",content:$c,numLines:5,startLine:1,totalLines:5}}}')
+run compress-output.sh "$RDSMALL"
+[ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "compress-output Read: small file untouched" || bad "read small (out=$OUT)"
 
 # U4: in-session dedup.
 DCFG="$TMP/dedup-cfg.json"

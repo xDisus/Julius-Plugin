@@ -37,7 +37,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Read|Grep|Glob",
+        "matcher": "Bash|Read",
         "hooks": [
           {
             "type": "command",

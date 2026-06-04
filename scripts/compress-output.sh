@@ -47,22 +47,21 @@ case "$TOOL" in
     LABEL=$(echo "$INPUT" | jq -r '.tool_input.command // "command"' 2>/dev/null | head -c 60)
     SHAPE="object"; MODE="lines" ;;
   Read)
-    RAW=$(echo "$INPUT" | jq -r 'if (.tool_response|type)=="string" then .tool_response else (.tool_response.stdout // (.tool_response|tostring)) end' 2>/dev/null)
     LABEL=$(echo "$INPUT" | jq -r '.tool_input.file_path // "file"' 2>/dev/null)
-    SHAPE="string"; MODE="lines" ;;
-  Glob)
-    RAW=$(echo "$INPUT" | jq -r 'if (.tool_response|type)=="string" then .tool_response else (.tool_response|tostring) end' 2>/dev/null)
-    LABEL=$(echo "$INPUT" | jq -r '.tool_input.pattern // "glob"' 2>/dev/null)
-    SHAPE="string"; MODE="list" ;;
-  Grep)
-    RAW=$(echo "$INPUT" | jq -r 'if (.tool_response|type)=="string" then .tool_response else (.tool_response|tostring) end' 2>/dev/null)
-    LABEL=$(echo "$INPUT" | jq -r '.tool_input.pattern // "grep"' 2>/dev/null)
-    SHAPE="string"
-    case "$(echo "$INPUT" | jq -r '.tool_input.output_mode // "files_with_matches"' 2>/dev/null)" in
-      count) MODE="skip" ;;
-      files_with_matches) MODE="list" ;;
-      *) MODE="lines" ;;
-    esac ;;
+    MODE="lines"
+    # Current CC: tool_response = {type:"text", file:{content,...}}. Older: a string.
+    if [ "$(echo "$INPUT" | jq -r '.tool_response.file.content // empty' 2>/dev/null | head -c1)" != "" ]; then
+      RAW=$(echo "$INPUT" | jq -r '.tool_response.file.content' 2>/dev/null)
+      TR=$(echo "$INPUT" | jq -c '.tool_response' 2>/dev/null)
+      SHAPE="read_object"
+    else
+      RAW=$(echo "$INPUT" | jq -r 'if (.tool_response|type)=="string" then .tool_response else (.tool_response|tostring) end' 2>/dev/null)
+      SHAPE="string"
+    fi ;;
+  # Grep/Glob deferred: their live tool_response shapes are unverified. Read turned out
+  # to be a structured object (not the documented string), so the string assumption for
+  # Grep/Glob is untrustworthy. Re-enable once their shapes are captured from a real
+  # session (see docs/plans deferred work). Until then they pass through untouched.
   *) exit 0 ;;
 esac
 [ -n "$RAW" ] || exit 0
@@ -71,17 +70,29 @@ LINES=$(printf '%s\n' "$RAW" | wc -l | tr -d ' ')
 
 # Emit helpers --------------------------------------------------------------
 emit() {  # emit <text> <note>
-  if [ "$SHAPE" = "object" ]; then
-    jq -n --arg out "$1" --arg err "$STDERR" --arg note "$2" '{
-      hookSpecificOutput: { hookEventName: "PostToolUse",
-        additionalContext: ("[JULIUS] Bash stdout compressed (" + $note + "); errors/paths preserved."),
-        updatedToolOutput: { stdout: $out, stderr: $err, interrupted: false, isImage: false } } }'
-  else
-    jq -n --arg out "$1" --arg note "$2" '{
-      hookSpecificOutput: { hookEventName: "PostToolUse",
-        additionalContext: ("[JULIUS] output compressed (" + $note + "); paths/matches preserved."),
-        updatedToolOutput: $out } }'
-  fi
+  case "$SHAPE" in
+    object)
+      jq -n --arg out "$1" --arg err "$STDERR" --arg note "$2" '{
+        hookSpecificOutput: { hookEventName: "PostToolUse",
+          additionalContext: ("[JULIUS] Bash stdout compressed (" + $note + "); errors/paths preserved."),
+          updatedToolOutput: { stdout: $out, stderr: $err, interrupted: false, isImage: false } } }'
+      ;;
+    read_object)
+      # Rebuild the Read object, swapping file.content and refreshing numLines.
+      local nlines
+      nlines=$(printf '%s\n' "$1" | wc -l | tr -d ' ')
+      jq -n --argjson tr "$TR" --arg out "$1" --argjson nl "$nlines" --arg note "$2" '{
+        hookSpecificOutput: { hookEventName: "PostToolUse",
+          additionalContext: ("[JULIUS] Read content compressed (" + $note + "); paths preserved."),
+          updatedToolOutput: ($tr | .file.content = $out | .file.numLines = $nl) } }'
+      ;;
+    *)
+      jq -n --arg out "$1" --arg note "$2" '{
+        hookSpecificOutput: { hookEventName: "PostToolUse",
+          additionalContext: ("[JULIUS] output compressed (" + $note + "); paths/matches preserved."),
+          updatedToolOutput: $out } }'
+      ;;
+  esac
 }
 
 # --- Dedup: exact in-session repeat → back-reference (before spending compression) ---
