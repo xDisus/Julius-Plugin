@@ -2,11 +2,12 @@
   "normal": {
     "label": "Normal",
     "icon": "✅",
-    "description": "Zero quality loss. Coach + manifest + haiku routing only.",
+    "description": "Zero quality loss. Deterministic compression + coach + manifest + haiku routing.",
     "coach": {
       "enabled": true,
       "max_preamble_words": 50,
-      "check_parallel_tools": true
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -16,6 +17,18 @@
       "trivial_keywords": ["list", "show", "print", "what", "which", "where", "format"]
     },
     "compress_output": {
+      "enabled": true,
+      "threshold_lines": 200,
+      "head_lines": 30,
+      "tail_lines": 15,
+      "list_cap": 50,
+      "flash_fallback_lines": 999999,
+      "preserve_errors": true,
+      "preserve_stacktraces": true,
+      "preserve_paths": true,
+      "dedup": { "enabled": true, "min_lines": 15, "max_entries": 50 }
+    },
+    "prevention": {
       "enabled": false
     },
     "subagent_reader": {
@@ -37,11 +50,12 @@
   "pro": {
     "label": "Pro",
     "icon": "⚠️",
-    "description": "Balanced savings. Bash output compression + batch synthesis + pipelines.",
+    "description": "Balanced savings. Deterministic compression + prevention + batch synthesis + pipelines.",
     "coach": {
       "enabled": true,
       "max_preamble_words": 40,
-      "check_parallel_tools": true
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -52,10 +66,19 @@
     },
     "compress_output": {
       "enabled": true,
-      "threshold_lines": 150,
+      "threshold_lines": 120,
+      "head_lines": 25,
+      "tail_lines": 15,
+      "list_cap": 40,
+      "flash_fallback_lines": 999999,
       "preserve_errors": true,
       "preserve_stacktraces": true,
-      "preserve_paths": true
+      "preserve_paths": true,
+      "dedup": { "enabled": true, "min_lines": 12, "max_entries": 50 }
+    },
+    "prevention": {
+      "enabled": true,
+      "read_nudge_lines": 120
     },
     "batch_synthesis": {
       "enabled": true,
@@ -78,11 +101,12 @@
   "beast": {
     "label": "Beast",
     "icon": "🦍",
-    "description": "Maximum savings. Bash compression + large-file guard + oracle + caveman agents.",
+    "description": "Maximum savings. Deterministic + flash fallback + large-file guard + oracle + caveman agents.",
     "coach": {
       "enabled": true,
       "max_preamble_words": 30,
-      "check_parallel_tools": true
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -94,9 +118,18 @@
     "compress_output": {
       "enabled": true,
       "threshold_lines": 80,
+      "head_lines": 20,
+      "tail_lines": 10,
+      "list_cap": 30,
+      "flash_fallback_lines": 120,
       "preserve_errors": true,
       "preserve_stacktraces": true,
-      "preserve_paths": true
+      "preserve_paths": true,
+      "dedup": { "enabled": true, "min_lines": 10, "max_entries": 80 }
+    },
+    "prevention": {
+      "enabled": true,
+      "read_nudge_lines": 80
     },
     "batch_synthesis": {
       "enabled": true,

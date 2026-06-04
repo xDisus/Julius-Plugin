@@ -109,6 +109,7 @@ chmod +x "$STUB"
 export JULIUS_FLASH_BIN="$STUB"
 
 set_tier beast
+rm -rf "$JULIUS_STATE_DIR/dedup"   # isolate shape tests from the dedup feature (real config has it on)
 
 # compress-output Bash: deterministic-first — shrinks WITHOUT flash (stub would be a tell).
 run compress-output.sh "$(jq -n --arg o "$BIGOUT" '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"x"},tool_response:{stdout:$o,stderr:"",interrupted:false,isImage:false}}')"
@@ -146,6 +147,8 @@ OUT=$(JULIUS_CONFIG="$PCFG" JULIUS_FLASH_BIN="/bin/false" bash -c 'printf "%s" "
 set_tier beast
 
 # U3: Read/Grep/Glob deterministic compression (string-shaped updatedToolOutput).
+# Distinct inputs per tool so the dedup feature (on in real config) can't cross-trip them.
+rm -rf "$JULIUS_STATE_DIR/dedup"
 READBIG=$(seq 1 300)
 run compress-output.sh "$(jq -n --arg t "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Read",tool_input:{file_path:"big.py"},tool_response:$t}')"
 if [ "$RC" -eq 0 ] && echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
@@ -155,7 +158,8 @@ else
   bad "compress-output Read path (rc=$RC, out=$OUT)"
 fi
 
-run compress-output.sh "$(jq -n --arg t "$READBIG" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"content"},tool_response:$t}')"
+GREPBIG=$(seq 2000 2300)
+run compress-output.sh "$(jq -n --arg t "$GREPBIG" '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"content"},tool_response:$t}')"
 echo "$OUT" | jq -e '(.hookSpecificOutput.updatedToolOutput|type)=="string"' >/dev/null 2>&1 \
   && ok "compress-output Grep content: line-truncated string" || bad "grep content (out=$OUT)"
 
@@ -167,7 +171,8 @@ echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -
 run compress-output.sh "$(jq -n '{hook_event_name:"PostToolUse",tool_name:"Grep",tool_input:{output_mode:"count"},tool_response:"42"}')"
 [ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "compress-output Grep count: left untouched" || bad "grep count (out=$OUT)"
 
-run compress-output.sh "$(jq -n --arg t "$FILELIST" '{hook_event_name:"PostToolUse",tool_name:"Glob",tool_input:{pattern:"**/*.py"},tool_response:$t}')"
+GLOBLIST=$(for i in $(seq 1 200); do echo "lib/mod_$i.py"; done)
+run compress-output.sh "$(jq -n --arg t "$GLOBLIST" '{hook_event_name:"PostToolUse",tool_name:"Glob",tool_input:{pattern:"**/*.py"},tool_response:$t}')"
 echo "$OUT" | jq -r '.hookSpecificOutput.updatedToolOutput' 2>/dev/null | grep -q "more" \
   && ok "compress-output Glob: capped list" || bad "glob cap (out=$OUT)"
 
@@ -235,7 +240,7 @@ set_tier beast
 echo
 echo "[coach-patterns] PreToolUse cheap-pattern coaching"
 CCFG="$TMP/coach-cfg.json"
-jq -n '{beast:{coaching:{cheap_patterns:true}},normal:{coaching:{cheap_patterns:false}}}' > "$CCFG"
+jq -n '{beast:{coach:{cheap_patterns:true}},normal:{coach:{cheap_patterns:false}}}' > "$CCFG"
 cpn() { OUT=$(JULIUS_CONFIG="$CCFG" bash -c 'printf "%s" "$1" | "$2/coach-patterns.sh"' _ "$1" "$SCRIPTS" 2>/dev/null); }
 
 cpn "$(jq -n '{hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:"cat bigfile.txt"}}')"

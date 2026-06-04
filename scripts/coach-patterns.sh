@@ -11,7 +11,7 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && p
 source "$PLUGIN_ROOT/lib/julius-common.sh"
 
 TIER=$(julius_tier) || exit 0
-[ "$(julius_config "$TIER" .coaching.cheap_patterns false)" = "true" ] || exit 0
+[ "$(julius_config "$TIER" .coach.cheap_patterns false)" = "true" ] || exit 0
 
 INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0

@@ -61,26 +61,37 @@ output) and **caveman** (model output); Julius hooks alone contribute the smalle
 | **Task Manifest** ✅ | `TaskCreated` + `TaskCompleted` | Maintains a compact `[TASKS] 2/6 done. Active: …` digest. |
 | **Haiku Routing** 🎯 | Agent `tier-router.md` | Trivial tasks delegated to haiku workers, freeing the main model. |
 
+### Deterministic compression (all tiers — the default first pass)
+
+| Feature | Mechanism | What it does |
+|---------|-----------|-------------|
+| **Tool-Output Compression** ✂️ | `PostToolUse` (Bash, Read, Grep, Glob) | Deterministic, offline truncation (middle-out keeping head+tail+all error/warn lines), ANSI strip, consecutive-dup collapse, and list capping. Replaces output via `updatedToolOutput` (object for Bash, string for the rest). **Always preserves errors/paths; on any failure the original output is kept (no data loss); works without an API key.** |
+| **Repeated-Output Dedup** 🪞 | `PostToolUse` | Exact in-session repeats become `[same as earlier output of …]`. Bounded store, oldest evicted. |
+| **Cheap-Pattern Coaching** 🧭 | `PreToolUse` (Bash) | Advisory nudges: `cat <file>` → Read, `cat \| grep` → Grep tool. Skips heredocs/targeted commands. |
+
 ### Pro+
 
-| Feature | Mechanism | Threshold |
-|---------|-----------|-----------|
-| **Bash Output Compression** ✂️ | `PostToolUse` (Bash only) | Pro: >150 lines, Beast: >80. Replaces stdout via `updatedToolOutput`, preserving errors/paths. On any failure the original output is kept (no data loss). |
+| Feature | Mechanism | What it does |
+|---------|-----------|-------------|
+| **Read-Range Prevention** 📐 | `PreToolUse` (Read) | Medium-size reads with no offset/limit get a pagination nudge — keep the whole file out of context. Advisory; yields the large band to Large-File Guard. |
 | **Batch Synthesis** 🔗 | `PostToolBatch` | Cross-references parallel tool outputs into one dense synthesis. |
-| **Agent Pipelines** 🔄 | `TeammateIdle` | When a teammate idles with pending work (active tasks / untested changes), redirects it. Capped by `max_reactivations`. |
+| **Agent Pipelines** 🔄 | `TeammateIdle` | When a teammate idles with pending work, redirects it. Capped by `max_reactivations`. |
 
 ### Beast only
 
 | Feature | Mechanism | What it does |
 |---------|-----------|-------------|
-| **Large-File Guard** 📖 | `PreToolUse` on Read + `julius-reader` | >50-line reads are blocked and redirected to the haiku reader (returns a JSON summary). Skipped inside subagents so the reader itself can read. |
-| **Context Oracle** 🔮 | `UserPromptSubmit` | Flash pre-processes non-trivial prompts into `TARGETS / APPROACH / WATCH`. Gated by prompt length and cached by content hash to avoid repeat calls. |
-| **Compressed Workers** 🤖 | `julius-reader`, `julius-executor`, `julius-researcher` | Ultra-compressed agent prompts for mechanical tasks. Pairs with the external [caveman](https://github.com/JuliusBrussee/caveman) tool. |
+| **Large-File Guard** 📖 | `PreToolUse` on Read + `julius-reader` | >50-line reads are blocked and redirected to the haiku reader (JSON summary). Skipped inside subagents. |
+| **Flash Semantic Fallback** 🔮 | `PostToolUse` (Bash) | Only when deterministic output is still over `flash_fallback_lines`, a Haiku pass semantically compresses it. Beast + Bash only. |
+| **Context Oracle** 🔮 | `UserPromptSubmit` | Flash pre-processes non-trivial prompts into `TARGETS / APPROACH / WATCH`. Length-gated, cached by content hash. |
+| **Compressed Workers** 🤖 | `julius-reader`, `julius-executor`, `julius-researcher` | Ultra-compressed agent prompts. Pairs with the external [caveman](https://github.com/JuliusBrussee/caveman) tool. |
 
-> **Note on cost:** the compression/oracle/synthesis hooks call the Anthropic Haiku API
-> on the critical path. They are gated (size thresholds, prompt-length gate, caching) so
-> trivial operations don't pay a network round-trip. Without `ANTHROPIC_API_KEY` these
-> hooks degrade gracefully — they no-op and the original output/prompt is preserved.
+> **Mechanism order:** deterministic compression runs first at every tier — it's free,
+> offline, and never loses data. Flash (Haiku) is a **Beast-only fallback** for Bash,
+> fired only when the deterministic result is still over budget. The oracle/synthesis
+> hooks also call Haiku but are gated (length, batch size, caching). Without
+> `ANTHROPIC_API_KEY`, every flash-backed path no-ops and the deterministic/original
+> output is preserved.
 
 ---
 
@@ -89,16 +100,18 @@ output) and **caveman** (model output); Julius hooks alone contribute the smalle
 ### Hooks (8 lifecycle events)
 
 ```
-UserPromptSubmit → oracle-preprocess.sh    (Beast: flash pre-processes prompt)
-PreToolUse Read  → large-file-guard.sh     (Beast: redirect large reads)
-PostToolUse Bash → compress-output.sh      (Pro+: replace large Bash stdout)
-PostToolBatch    → batch-synthesizer.sh    (Pro+: cross-reference batch)
-Stop             → turn-coach.sh           (All: efficiency coaching)
-                 → metrics-stop.sh         (All: real token/cost metrics)
-TeammateIdle     → keep-busy.sh            (Pro+: keep agents working)
-TaskCreated      → task-manifest.sh        (All: compressed task list)
-TaskCompleted    → task-manifest.sh        (All: mark done)
+UserPromptSubmit       → oracle-preprocess.sh   (Beast: flash pre-processes prompt)
+PreToolUse Read        → large-file-guard.sh    (Beast: redirect large reads)
+                       → read-grep-guard.sh     (Pro+: read-range nudge)
+PreToolUse Bash        → coach-patterns.sh      (All: cheap-pattern coaching)
+PostToolUse B/R/G/G    → compress-output.sh     (All: deterministic; Beast: +flash)
+PostToolBatch          → batch-synthesizer.sh   (Pro+: cross-reference batch)
+Stop                   → turn-coach.sh          (All: efficiency coaching)
+                       → metrics-stop.sh        (All: real token/cost metrics)
+TeammateIdle           → keep-busy.sh           (Pro+: keep agents working)
+TaskCreated/Completed  → task-manifest.sh       (All: compressed task list)
 ```
+(PostToolUse matcher: `Bash|Read|Grep|Glob`.)
 
 All hooks read the documented JSON event on **stdin** and respond via the correct
 mechanism for their event (exit code, `additionalContext`, or `updatedToolOutput`).
@@ -116,14 +129,17 @@ mechanism for their event (exit code, `additionalContext`, or `updatedToolOutput
 
 | Script | Role | Dependencies |
 |--------|------|-------------|
-| `lib/julius-common.sh` | Shared helpers (state dir, tier, config, portable md5) — sourced by all hooks | `jq` |
+| `lib/julius-common.sh` | Shared helpers (state dir, tier, config, md5, dedup) — sourced by all hooks | `jq` |
+| `lib/julius-compress.sh` | Deterministic compression primitives (strip/collapse/middle-out/cap) | `awk`, `sed` |
 | `flash-client.sh` | Anthropic Haiku client | `curl`, `jq`, `ANTHROPIC_API_KEY` |
 | `tier-setter.sh` | Writes active tier | `jq` |
 | `turn-coach.sh` | Stop hook | `jq` |
 | `metrics-stop.sh` | Stop hook (metrics) | `jq`, `bc` |
 | `task-manifest.sh` | Task hooks | `jq` |
-| `compress-output.sh` | PostToolUse Bash hook | `flash-client.sh` |
-| `large-file-guard.sh` | PreToolUse Read hook | `jq` |
+| `compress-output.sh` | PostToolUse compressor (Bash/Read/Grep/Glob) | `julius-compress.sh` |
+| `large-file-guard.sh` | PreToolUse Read block | `jq` |
+| `read-grep-guard.sh` | PreToolUse Read range nudge | `jq` |
+| `coach-patterns.sh` | PreToolUse Bash coaching | `jq` |
 | `batch-synthesizer.sh` | PostToolBatch hook | `flash-client.sh` |
 | `oracle-preprocess.sh` | UserPromptSubmit hook | `flash-client.sh` |
 | `keep-busy.sh` | TeammateIdle hook | `jq`, `git` |
@@ -154,6 +170,7 @@ Julius-Plugin/
 ├── scripts/                      # hook implementations (see table above)
 ├── lib/
 │   ├── julius-common.sh          # shared helpers, sourced by hooks
+│   ├── julius-compress.sh        # deterministic compression primitives
 │   └── tier-config.json          # thresholds per tier
 ├── tests/
 │   ├── test-all.sh               # smoke tests (existence/parse + behavior)

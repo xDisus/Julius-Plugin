@@ -48,7 +48,7 @@ fi
 echo ""
 printf "\033${BOLD}═══ FILES & STRUCTURE ═══\033${NC}\n"
 
-for f in "plugin.json" "hooks/hooks.json" "lib/tier-config.json"; do
+for f in "plugin.json" "hooks/hooks.json" "lib/tier-config.json" "lib/julius-common.sh" "lib/julius-compress.sh"; do
   [ -f "$ROOT/$f" ] && ok "${f##*/} ($f)" || fail "${f##*/} missing ($f)"
 done
 
@@ -56,7 +56,7 @@ for a in "tier-router" "julius-reader" "julius-executor" "julius-researcher"; do
   [ -f "$ROOT/agents/$a.md" ] && ok "Agent: $a" || fail "Agent: $a missing"
 done
 
-SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh"
+SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh read-grep-guard.sh coach-patterns.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh"
 for s in $SCRIPTS; do
   if [ -f "$ROOT/scripts/$s" ]; then
     [ -x "$ROOT/scripts/$s" ] && ok "${s%.sh} — executable" || warn "${s%.sh} — NOT executable"

@@ -48,7 +48,7 @@ done
 
 # 4. All scripts exist
 echo "[scripts/]"
-for script in flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh; do
+for script in flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh read-grep-guard.sh coach-patterns.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh; do
   if [ -f "$ROOT/scripts/$script" ]; then
     green "Script '$script' exists"
   else
@@ -86,11 +86,13 @@ done
 
 # 7b. Shared lib
 echo "[lib/]"
-if [ -f "$ROOT/lib/julius-common.sh" ]; then
-  green "julius-common.sh exists"
-else
-  red "julius-common.sh missing"
-fi
+for libf in julius-common.sh julius-compress.sh; do
+  if [ -f "$ROOT/lib/$libf" ]; then
+    green "$libf exists"
+  else
+    red "$libf missing"
+  fi
+done
 
 # 8. Marketplace
 echo "[marketplace]"
