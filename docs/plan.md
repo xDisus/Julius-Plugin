@@ -170,9 +170,9 @@ Julius-Plugin/                        # GitHub repo (public)
 │   └── install.sh                   # npx entrypoint: detects Claude, copies plugin
 ├── plugin.json                       # Plugin manifest
 ├── agents/
-│   ├── caveman-reader.md            # F1: Haiku reader with caveman prompt
-│   ├── caveman-executor.md          # F1: Haiku executor (lint, format, test)
-│   ├── caveman-researcher.md        # F1: Haiku web researcher
+│   ├── julius-reader.md            # F1: Haiku reader with caveman prompt
+│   ├── julius-executor.md          # F1: Haiku executor (lint, format, test)
+│   ├── julius-researcher.md        # F1: Haiku web researcher
 │   └── tier-router.md               # F3: Generic worker, model set by hook
 ├── hooks/
 │   └── hooks.json                   # All hook registrations
@@ -315,11 +315,11 @@ Julius-Plugin/                        # GitHub repo (public)
 |-------|-------|
 | **Goal** | Redirecionar leitura de arquivos grandes para subagente haiku |
 | **Dependencies** | U1, U2 (caveman agents) |
-| **Files** | `scripts/large-file-guard.sh` (Create), `agents/caveman-reader.md` (Create), update `hooks/hooks.json` (Modify) |
-| **Approach** | `PreToolUse` hook com matcher `Read`. Script verifica `file_path` e tamanho (via `wc -l`). Beast: >50 linhas → `exit 2` (bloqueia). Script então spawna `caveman-reader` agent que lê o arquivo e retorna JSON com `{summary, structure, edit_targets, confidence}`. JSON é injetado como feedback via stdout. Se arquivo ≤ threshold → `exit 0` (deixa passar) |
+| **Files** | `scripts/large-file-guard.sh` (Create), `agents/julius-reader.md` (Create), update `hooks/hooks.json` (Modify) |
+| **Approach** | `PreToolUse` hook com matcher `Read`. Script verifica `file_path` e tamanho (via `wc -l`). Beast: >50 linhas → `exit 2` (bloqueia). Script então spawna `julius-reader` agent que lê o arquivo e retorna JSON com `{summary, structure, edit_targets, confidence}`. JSON é injetado como feedback via stdout. Se arquivo ≤ threshold → `exit 0` (deixa passar) |
 | **Patterns** | `exit 2` = block. Feedback = stdout do hook. Caveman agent é haiku, custo ~1/30 do modelo principal |
 | **Test Scenarios** | |
-| | Happy: Read("auth.py", 500 linhas) → bloqueado → caveman-reader retorna resumo de 200 tokens |
+| | Happy: Read("auth.py", 500 linhas) → bloqueado → julius-reader retorna resumo de 200 tokens |
 | | Happy: Read("auth.py", offset=145, limit=30) → 30 linhas < threshold → bypass |
 | | Edge: Modelo não consegue trabalhar com resumo → faz Read direto (segunda tentativa, hook deixa passar) |
 | | Error: Caveman-reader falha → fallback: deixa Read original passar |
@@ -352,11 +352,11 @@ Julius-Plugin/                        # GitHub repo (public)
 |-------|-------|
 | **Goal** | Criar agentes com system prompt ultra-comprimido em caveman |
 | **Dependencies** | U1 |
-| **Files** | `agents/caveman-reader.md` (Create, ou update se criado em U7), `agents/caveman-executor.md` (Create), `agents/caveman-researcher.md` (Create) |
+| **Files** | `agents/julius-reader.md` (Create, ou update se criado em U7), `agents/julius-executor.md` (Create), `agents/julius-researcher.md` (Create) |
 | **Approach** | Cada agente com `model: haiku`. System prompt em caveman: sem artigos, sem preposições, verbos no imperativo. Ex: "U READ FILE. U FIND structure: classes, functions, notable lines. U RETURN JSON. NO EXPLAIN. NO PREAMBLE." Agentes referenciados pela skill `julius`, que instrui o modelo principal a delegar para eles em Beast mode |
 | **Patterns** | System prompt <200 tokens. Retorno estruturado (JSON). Sempre haiku |
 | **Test Scenarios** | |
-| | Happy: Modelo delega "read and summarize auth.py" → caveman-reader spawnado |
+| | Happy: Modelo delega "read and summarize auth.py" → julius-reader spawnado |
 | | Happy: Caveman-reader retorna JSON válido em <500 tokens |
 | | Edge: Modelo delega task complexa → caveman responde "TOO COMPLEX. DELEGATE BACK" |
 | **Verification** | Beast mode. Verificar que subagentes usam haiku, retornam JSON compacto |

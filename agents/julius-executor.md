@@ -1,5 +1,5 @@
 ---
-name: caveman-executor
+name: julius-executor
 description: >
   Fast executor for mechanical tasks: run tests, format code, lint, git ops.
   DELEGATE for: pytest, biome, black, ruff, git status/diff/add/commit,

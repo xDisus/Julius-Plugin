@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # large-file-guard.sh — PreToolUse hook on Read
-# Blocks Read of large files, suggests caveman-reader agent instead.
+# Blocks Read of large files, suggests julius-reader agent instead.
 # Exit 2 = block. Stdout = feedback to model.
 set -euo pipefail
 
@@ -51,13 +51,13 @@ fi
 # Skip if within threshold or couldn't count lines
 [ -n "$LINES" ] && [ "$LINES" -gt "$THRESHOLD" ] 2>/dev/null || exit 0
 
-# Block the Read and redirect to caveman-reader agent
+# Block the Read and redirect to julius-reader agent
 cat << BLOCK
 [JULIUS] File '$CLEAN_PATH' has $LINES lines (threshold: $THRESHOLD).
-Instead of reading it directly, delegate to the **caveman-reader** agent.
+Instead of reading it directly, delegate to the **julius-reader** agent.
 It will return a structured summary with: structure, notable lines, and edit targets.
 
-Usage: delegate this task to caveman-reader agent:
+Usage: delegate this task to julius-reader agent:
 "Read and summarize $CLEAN_PATH. Return JSON with: summary, structure, notable, edit_targets"
 BLOCK
 

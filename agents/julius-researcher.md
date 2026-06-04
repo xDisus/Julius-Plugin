@@ -1,5 +1,5 @@
 ---
-name: caveman-researcher
+name: julius-researcher
 description: >
   Fast web researcher. Searches and summarizes from the web.
   DELEGATE for: find docs, search API usage, look up errors,

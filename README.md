@@ -52,13 +52,13 @@ npx julius-plugin
 | 4 | **Output Compression** ✂️ | `PostToolUse` on Bash/Read/Grep/Glob | Pro: >100 lines → flash summary. Beast: >20. Preserves errors/stacktraces |
 | 5 | **Smart Compaction** 🗜️ | `PreCompact` | Blocks native compaction. Injects decision-focused summary. Pro: preserves last 15 turns. Beast: 8 |
 | 6 | **Batch Synthesis** 🔗 | `PostToolBatch` | Cross-references parallel outputs. Detects imports, shared entities, relationships |
-| 7 | **Subagent Reader** 📖 | `PreToolUse` on Read + Agent `caveman-reader.md` | Beast: >50 lines → blocks Read, delegates to haiku reader. Returns JSON `{summary, structure, edit_targets}` |
+| 7 | **Subagent Reader** 📖 | `PreToolUse` on Read + Agent `julius-reader.md` | Beast: >50 lines → blocks Read, delegates to haiku reader. Returns JSON `{summary, structure, edit_targets}` |
 
 ### Phase 3 — Beast Mode (Beast only)
 
 | # | Feature | Mechanism | What it does |
 |---|---------|-----------|-------------|
-| 8 | **Caveman Agents** 🤖 | Agents: executor + researcher | Ultra-compressed prompts. No "I'll", no preamble. Just action verbs and results |
+| 8 | **Compressed Workers** 🤖 | Agents: julius-reader, julius-executor, julius-researcher | Ultra-compressed prompts (caveman-style). No preamble. Delegated by main agent for mechanical tasks. Pairs with external [caveman](https://github.com/JuliusBrussee/caveman) tool |
 | 9 | **Docs Compression** 📄 | `SessionStart` hook | Compresses CLAUDE.md/AGENTS.md into caveman shorthand. Cached with hash |
 | 10 | **Context Oracle** 🔮 | `UserPromptSubmit` hook | Flash pre-processes user prompt + project index. Returns `TARGETS: auth.py:145. APPROACH: check JWT. WATCH: Redis timeout` |
 | 11 | **Agent Pipelines** 🔄 | `TeammateIdle` hook | Keeps subagents alive. Detects untested changes, pending tasks, reactivates with directed work |
@@ -89,9 +89,9 @@ TaskCompleted    → task-manifest.sh         (All: mark done)
 | Agent | Purpose | Tools | Size |
 |-------|---------|-------|------|
 | `tier-router` | Generic trivial tasks | Read, Bash, Glob, Grep | ~250 tokens |
-| `caveman-reader` | Read files, return JSON summary | Read, Grep, Glob | ~200 tokens |
-| `caveman-executor` | Run tests, lint, format, git ops | Bash, Read, Grep | ~180 tokens |
-| `caveman-researcher` | Web search & summarize | WebSearch, WebFetch | ~160 tokens |
+| `julius-reader` | Read files, return JSON summary | Read, Grep, Glob | ~200 tokens |
+| `julius-executor` | Run tests, lint, format, git ops | Bash, Read, Grep | ~180 tokens |
+| `julius-researcher` | Web search & summarize | WebSearch, WebFetch | ~160 tokens |
 
 ### Scripts (11 bash scripts)
 
@@ -125,9 +125,9 @@ Julius-Plugin/
 │   └── julius.md                 # /julius normal|pro|beast
 ├── agents/
 │   ├── tier-router.md            # F3: generic haiku worker
-│   ├── caveman-reader.md         # F1: file analyst
-│   ├── caveman-executor.md       # F1: test/lint/git worker
-│   └── caveman-researcher.md     # F1: web researcher
+│   ├── julius-reader.md         # F1: file analyst
+│   ├── julius-executor.md       # F1: test/lint/git worker
+│   └── julius-researcher.md     # F1: web researcher
 ├── hooks/
 │   └── hooks.json                # 10 lifecycle hooks
 ├── scripts/

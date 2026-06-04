@@ -58,7 +58,7 @@ done
 
 # 5. All agents exist
 echo "[agents/]"
-for agent in tier-router.md caveman-reader.md caveman-executor.md caveman-researcher.md; do
+for agent in tier-router.md julius-reader.md julius-executor.md julius-researcher.md; do
   if [ -f "$ROOT/agents/$agent" ]; then
     green "Agent '$agent' exists"
   else

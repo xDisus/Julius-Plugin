@@ -52,7 +52,7 @@ for f in "plugin.json" "hooks/hooks.json" "lib/tier-config.json"; do
   [ -f "$ROOT/$f" ] && ok "${f##*/} ($f)" || fail "${f##*/} missing ($f)"
 done
 
-for a in "tier-router" "caveman-reader" "caveman-executor" "caveman-researcher"; do
+for a in "tier-router" "julius-reader" "julius-executor" "julius-researcher"; do
   [ -f "$ROOT/agents/$a.md" ] && ok "Agent: $a" || fail "Agent: $a missing"
 done
 
@@ -137,6 +137,22 @@ fi
 echo ""
 printf "\033${BOLD}═══ COMPATIBILITY ═══\033${NC}\n"
 
+# Check caveman (JuliusBrussee/caveman) — external output compressor
+CAVEMAN_DIR=""
+for d in "$HOME/.claude/plugins/caveman" "$HOME/.claude/plugins/cache/caveman" "$HOME/.claude/skills/caveman"; do
+  [ -d "$d" ] && CAVEMAN_DIR="$d" && break
+done
+# Also check for /caveman command via Claude Code commands
+if [ -n "$CAVEMAN_DIR" ]; then
+  ok "caveman (JuliusBrussee) installed → output compression synergy"
+elif [ -f "$HOME/.claude/commands/caveman.md" ]; then
+  ok "caveman (JuliusBrussee) installed → output compression synergy"
+elif command -v caveman >/dev/null 2>&1; then
+  ok "caveman CLI found → output compression synergy"
+else
+  warn "caveman (JuliusBrussee) not found → install for output compression: curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash"
+fi
+
 # Check context-mode (mksglu/context-mode)
 CTX_MODE_DIR=""
 for d in "$HOME/.claude/plugins/context-mode" "$HOME/.claude/plugins/cache/context-mode"; do
@@ -148,19 +164,19 @@ else
   warn "context-mode not found — install for output sandboxing: /plugin install context-mode@context-mode"
 fi
 
-# Check caveman agents (Julius internal)
-CAVEMAN_OK=0
-for agent in "caveman-reader" "caveman-executor" "caveman-researcher"; do
+# Check Julius workers (internal compressed agents, inspired by caveman style)
+WORKERS_OK=0
+for agent in "julius-reader" "julius-executor" "julius-researcher"; do
   if grep -q "name: $agent" "$ROOT/agents/$agent.md" 2>/dev/null; then
-    CAVEMAN_OK=$((CAVEMAN_OK + 1))
+    WORKERS_OK=$((WORKERS_OK + 1))
   fi
 done
-if [ "$CAVEMAN_OK" -eq 3 ]; then
-  ok "Caveman agents: all 3 valid (reader, executor, researcher)"
-elif [ "$CAVEMAN_OK" -gt 0 ]; then
-  warn "Caveman agents: $CAVEMAN_OK/3 valid"
+if [ "$WORKERS_OK" -eq 3 ]; then
+  ok "Julius workers: all 3 valid (reader, executor, researcher)"
+elif [ "$WORKERS_OK" -gt 0 ]; then
+  warn "Julius workers: $WORKERS_OK/3 valid"
 else
-  fail "Caveman agents: none valid"
+  fail "Julius workers: none valid"
 fi
 
 # Check tier-router agent

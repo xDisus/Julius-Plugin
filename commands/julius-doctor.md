@@ -38,7 +38,7 @@ Run a full diagnostic check on the Julius Token Economy plugin.
   /julius command available
 ═══ FILES & STRUCTURE ═══
   plugin.json, hooks.json, tier-config.json, commands/
-  4 agents (tier-router, caveman-reader, caveman-executor, caveman-researcher)
+  4 agents (tier-router, julius-reader, julius-executor, julius-researcher)
   11 scripts (all present + executable)
 ═══ HOOKS VALIDATION ═══
   10 lifecycle hooks registered

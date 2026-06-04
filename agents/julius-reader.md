@@ -1,5 +1,5 @@
 ---
-name: caveman-reader
+name: julius-reader
 description: >
   Read-only file analyst. Returns structured JSON summaries of large files.
   Delegated by the main agent when a file exceeds the Read threshold.
