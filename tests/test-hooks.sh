@@ -206,6 +206,32 @@ DCOUNT=$(ls -1 "$JULIUS_STATE_DIR/dedup" 2>/dev/null | wc -l | tr -d ' ')
 [ "$DCOUNT" -le 3 ] && ok "dedup: store bounded by max_entries ($DCOUNT≤3)" || bad "dedup store unbounded ($DCOUNT)"
 rm -rf "$JULIUS_STATE_DIR/dedup"
 
+echo
+echo "[read-grep-guard] PreToolUse prevention"
+PCFG2="$TMP/prev-cfg.json"
+jq -n '{beast:{prevention:{enabled:true,read_nudge_lines:20},subagent_reader:{enabled:true,threshold_lines:50}},normal:{prevention:{enabled:false}}}' > "$PCFG2"
+MEDF="$TMP/med.py"; seq 1 30 > "$MEDF"
+BIGF2="$TMP/big2.py"; seq 1 100 > "$BIGF2"
+rgg() { OUT=$(JULIUS_CONFIG="$PCFG2" bash -c 'printf "%s" "$1" | "$2/read-grep-guard.sh"' _ "$1" "$SCRIPTS" 2>/dev/null); }
+
+rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$MEDF\"}}"
+echo "$OUT" | jq -e '.hookSpecificOutput.additionalContext | test("targeted range")' >/dev/null 2>&1 \
+  && ok "read-guard: nudge fires for medium file in band" || bad "read-guard band (out=$OUT)"
+
+rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$MEDF\",\"offset\":1,\"limit\":10}}"
+[ -z "$OUT" ] && ok "read-guard: no nudge when offset/limit present" || bad "read-guard offset (out=$OUT)"
+
+rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$BIGF2\"}}"
+[ -z "$OUT" ] && ok "read-guard: no nudge above block threshold (large-file-guard handles)" || bad "read-guard upper (out=$OUT)"
+
+rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"agent_id\":\"sub_1\",\"tool_input\":{\"file_path\":\"$MEDF\"}}"
+[ -z "$OUT" ] && ok "read-guard: no nudge inside subagent" || bad "read-guard subagent (out=$OUT)"
+
+printf '%s' "normal" > "$JULIUS_STATE_DIR/active-tier"
+rgg "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$MEDF\"}}"
+[ -z "$OUT" ] && ok "read-guard: disabled in normal tier" || bad "read-guard normal (out=$OUT)"
+set_tier beast
+
 # oracle-preprocess: non-trivial prompt → additionalContext with [ORACLE].
 # Use a stable cwd whose contents don't change between calls (the project index is
 # part of the cache key — a mutating dir would legitimately invalidate the cache).
