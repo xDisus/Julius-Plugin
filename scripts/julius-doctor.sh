@@ -43,6 +43,7 @@ fi
 
 [ -f "$ROOT/commands/julius.md" ] && ok "Command: /julius" || fail "Command /julius missing"
 [ -f "$ROOT/commands/julius-doctor.md" ] && ok "Command: /julius-doctor" || fail "Command /julius-doctor missing"
+[ -f "$ROOT/commands/julius-stats.md" ] && ok "Command: /julius-stats" || fail "Command /julius-stats missing"
 
 # ── FILES ──
 echo ""
@@ -56,7 +57,7 @@ for a in "tier-router" "julius-reader" "julius-executor" "julius-researcher"; do
   [ -f "$ROOT/agents/$a.md" ] && ok "Agent: $a" || fail "Agent: $a missing"
 done
 
-SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh read-grep-guard.sh coach-patterns.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh"
+SCRIPTS="flash-client.sh tier-setter.sh turn-coach.sh task-manifest.sh compress-output.sh large-file-guard.sh read-grep-guard.sh coach-patterns.sh batch-synthesizer.sh oracle-preprocess.sh keep-busy.sh metrics-stop.sh julius-doctor.sh julius-stats.sh"
 for s in $SCRIPTS; do
   if [ -f "$ROOT/scripts/$s" ]; then
     [ -x "$ROOT/scripts/$s" ] && ok "${s%.sh} — executable" || warn "${s%.sh} — NOT executable"

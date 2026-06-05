@@ -36,7 +36,23 @@ npx julius-plugin
 /julius pro        # Balanced compression
 /julius beast      # Maximum savings
 /julius-doctor     # Run diagnostic checks
+/julius-stats      # Measured numbers: real token usage + bytes elided by compression
 ```
+
+## Measuring real efficacy
+
+Julius reports each lever it can measure **separately** — there is no single "total saved"
+number, because some hooks add tokens (oracle, coaching) and some prevent reads
+counterfactually (guards), neither of which a compression delta can see.
+
+- **`/julius-stats`** — live, passive. `compress-output.sh` records the true orig-vs-compressed
+  bytes of every call it touches; `metrics-stop.sh` records real API-counted usage from the
+  transcript. Just work normally on `pro`/`beast`; the numbers accumulate in `~/.julius/metrics/`.
+- **`bash tests/replay.sh <transcript.jsonl>`** — deterministic test. Replays the *real* tool
+  outputs from a captured session through `compress-output.sh` at each tier and reports
+  visible-bytes per tier vs control. Capture the transcript on `normal` (lossless) so the
+  recorded outputs are raw. Isolates the compression lever — no model-nondeterminism confound.
+- **`bash tests/benchmark.sh`** — same harness on synthetic heavy scenarios (no session needed).
 
 ## Tiers
 
@@ -139,6 +155,7 @@ mechanism for their event (exit code, `additionalContext`, or `updatedToolOutput
 | `oracle-preprocess.sh` | UserPromptSubmit hook | `flash-client.sh` |
 | `keep-busy.sh` | TeammateIdle hook | `jq`, `git` |
 | `julius-doctor.sh` | Diagnostics | `jq` |
+| `julius-stats.sh` | Measured stats report (read-only) | `jq` |
 
 ---
 
@@ -154,7 +171,8 @@ Julius-Plugin/
 │   └── install.sh                # npx entrypoint
 ├── commands/
 │   ├── julius.md                 # /julius normal|pro|beast
-│   └── julius-doctor.md          # /julius-doctor
+│   ├── julius-doctor.md          # /julius-doctor
+│   └── julius-stats.md           # /julius-stats
 ├── agents/
 │   ├── tier-router.md            # generic haiku worker
 │   ├── julius-reader.md          # file analyst

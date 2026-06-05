@@ -41,6 +41,31 @@ julius_config() {
   [ -n "$val" ] && printf '%s' "$val" || printf '%s' "$def"
 }
 
+# Metrics dir — single home for all MEASURED numbers (compression deltas + usage).
+# Under $HOME (not the per-project state dir) so stats aggregate across projects,
+# matching metrics-stop.sh. Override with JULIUS_METRICS_DIR for tests.
+julius_metrics_dir() {
+  printf '%s' "${JULIUS_METRICS_DIR:-$HOME/.julius/metrics}"
+}
+
+# julius_record_compression <tool> <label> <orig_chars> <comp_chars> <note> [session]
+# Best-effort append of ONE measured compression delta as JSONL. MUST NOT fail the
+# caller: hooks run under `set -euo pipefail`, and losing a metric must never break
+# the compression emit or drop tool output. Every failure path returns 0.
+julius_record_compression() {
+  local tool="$1" label="$2" orig="$3" comp="$4" note="$5" session="${6:-}"
+  local dir f
+  dir="$(julius_metrics_dir)" || return 0
+  mkdir -p "$dir" 2>/dev/null || return 0
+  f="$dir/compression.jsonl"
+  jq -cn --arg tool "$tool" --arg label "$label" \
+    --argjson orig "${orig:-0}" --argjson comp "${comp:-0}" \
+    --arg note "$note" --arg session "$session" --arg ts "$(date -Iseconds)" \
+    '{ts:$ts,session:$session,tool:$tool,label:$label,orig_chars:$orig,comp_chars:$comp,note:$note}' \
+    >> "$f" 2>/dev/null || return 0
+  return 0
+}
+
 # Portable md5 of stdin (Linux md5sum, macOS md5, fallback cksum).
 julius_md5() {
   if command -v md5sum >/dev/null 2>&1; then

@@ -37,6 +37,10 @@ INPUT=$(julius_stdin)
 [ -n "$INPUT" ] || exit 0
 julius_is_json "$INPUT" || exit 0
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
+
+# Byte count of stdin string (token proxy = bytes/4, same basis as tests/benchmark.sh).
+jc_bytes() { printf '%s' "$1" | wc -c | tr -d ' '; }
 
 # --- Extract per-tool: RAW text, LABEL, SHAPE (object|read_object|string), STDERR ---
 RAW=""; LABEL=""; SHAPE="string"; STDERR=""
@@ -96,7 +100,9 @@ emit() {  # emit <text> <note>
 # --- Dedup: exact in-session repeat → back-reference (before spending compression) ---
 if [ "$DEDUP_ENABLED" = "true" ] && [ "$LINES" -ge "$DEDUP_MIN" ] 2>/dev/null; then
   if PREV=$(julius_dedup "$RAW" "$LABEL" "$DEDUP_MAX"); then
-    emit "[same as earlier output of $PREV]" "dedup"
+    BACKREF="[same as earlier output of $PREV]"
+    julius_record_compression "$TOOL" "$LABEL" "$(jc_bytes "$RAW")" "$(jc_bytes "$BACKREF")" "dedup" "$SESSION_ID" || true
+    emit "$BACKREF" "dedup"
     exit 0
   fi
 fi
@@ -120,5 +126,6 @@ fi
 
 # Only replace if we actually shrank it; otherwise leave the original untouched.
 [ "$RLINES" -lt "$LINES" ] 2>/dev/null || exit 0
+julius_record_compression "$TOOL" "$LABEL" "$(jc_bytes "$RAW")" "$(jc_bytes "$RESULT")" "$NOTE" "$SESSION_ID" || true
 emit "$RESULT" "$NOTE"
 exit 0
