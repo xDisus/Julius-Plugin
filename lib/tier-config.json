@@ -2,11 +2,12 @@
   "normal": {
     "label": "Normal",
     "icon": "✅",
-    "description": "Zero quality loss. Coach + manifest + haiku routing only.",
+    "description": "Zero quality loss. Coach + cheap-pattern coaching + manifest + haiku routing. No output is elided.",
     "coach": {
       "enabled": true,
-      "max_preamble_pct": 20,
-      "check_parallel_tools": true
+      "max_preamble_words": 50,
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -18,7 +19,7 @@
     "compress_output": {
       "enabled": false
     },
-    "smart_compact": {
+    "prevention": {
       "enabled": false
     },
     "subagent_reader": {
@@ -35,19 +36,17 @@
     },
     "caveman_agents": {
       "enabled": false
-    },
-    "docs_compression": {
-      "enabled": false
     }
   },
   "pro": {
     "label": "Pro",
     "icon": "⚠️",
-    "description": "Balanced savings. Compression + synthesis + pipelines.",
+    "description": "Balanced savings. Deterministic compression + prevention + batch synthesis + pipelines.",
     "coach": {
       "enabled": true,
-      "max_preamble_pct": 15,
-      "check_parallel_tools": true
+      "max_preamble_words": 40,
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -58,15 +57,19 @@
     },
     "compress_output": {
       "enabled": true,
-      "threshold_lines": 100,
+      "threshold_lines": 120,
+      "head_lines": 25,
+      "tail_lines": 15,
+      "list_cap": 40,
+      "flash_fallback_lines": 999999,
       "preserve_errors": true,
       "preserve_stacktraces": true,
-      "preserve_paths": true
+      "preserve_paths": true,
+      "dedup": { "enabled": true, "min_lines": 12, "max_entries": 50 }
     },
-    "smart_compact": {
+    "prevention": {
       "enabled": true,
-      "context_threshold_pct": 85,
-      "preserve_last_turns": 15
+      "read_nudge_lines": 120
     },
     "batch_synthesis": {
       "enabled": true,
@@ -84,19 +87,17 @@
     },
     "caveman_agents": {
       "enabled": false
-    },
-    "docs_compression": {
-      "enabled": false
     }
   },
   "beast": {
     "label": "Beast",
     "icon": "🦍",
-    "description": "Maximum savings. Full compression + oracle + caveman agents.",
+    "description": "Maximum savings. Deterministic + flash fallback + large-file guard + oracle + caveman agents.",
     "coach": {
       "enabled": true,
-      "max_preamble_pct": 10,
-      "check_parallel_tools": true
+      "max_preamble_words": 30,
+      "check_parallel_tools": true,
+      "cheap_patterns": true
     },
     "task_manifest": {
       "enabled": true
@@ -107,15 +108,19 @@
     },
     "compress_output": {
       "enabled": true,
-      "threshold_lines": 20,
+      "threshold_lines": 80,
+      "head_lines": 20,
+      "tail_lines": 10,
+      "list_cap": 30,
+      "flash_fallback_lines": 120,
       "preserve_errors": true,
       "preserve_stacktraces": true,
-      "preserve_paths": true
+      "preserve_paths": true,
+      "dedup": { "enabled": true, "min_lines": 10, "max_entries": 80 }
     },
-    "smart_compact": {
+    "prevention": {
       "enabled": true,
-      "context_threshold_pct": 60,
-      "preserve_last_turns": 8
+      "read_nudge_lines": 80
     },
     "batch_synthesis": {
       "enabled": true,
@@ -131,12 +136,10 @@
     },
     "oracle": {
       "enabled": true,
-      "flash_timeout_seconds": 5
+      "flash_timeout_seconds": 5,
+      "min_prompt_words": 6
     },
     "caveman_agents": {
-      "enabled": true
-    },
-    "docs_compression": {
       "enabled": true
     }
   }

@@ -46,6 +46,7 @@ else
   cp "$PLUGIN_SRC/hooks/"*.json "$PLUGIN_DST/hooks/" 2>/dev/null || true
   cp "$PLUGIN_SRC/scripts/"*.sh "$PLUGIN_DST/scripts/" 2>/dev/null || true
   cp "$PLUGIN_SRC/lib/"*.json "$PLUGIN_DST/lib/" 2>/dev/null || true
+  cp "$PLUGIN_SRC/lib/"*.sh "$PLUGIN_DST/lib/" 2>/dev/null || true   # julius-common.sh — sourced by every hook
   cp "$PLUGIN_SRC/.claude-plugin/"*.json "$PLUGIN_DST/.claude-plugin/" 2>/dev/null || true
 fi
 
