@@ -192,7 +192,25 @@ git clone https://github.com/xDisus/Julius-Plugin.git
 cd Julius-Plugin
 bash tests/test-all.sh     # full suite (includes behavioral hook tests)
 bash tests/test-hooks.sh   # hook I/O contract tests only
+bash tests/benchmark.sh    # tool-output token savings per tier vs control
 npm publish                # requires npm login
+```
+
+### Efficiency benchmark
+
+`tests/benchmark.sh` measures model-visible tool-output size per tier vs control over
+10 synthetic-but-realistic outputs (real `tool_response` shapes, no network). Estimated
+token savings (chars/4 proxy, tool-output compression only):
+
+| Tier | Saved vs control |
+|------|:----------------:|
+| Normal | 0% (lossless by design — compression off) |
+| Pro | ~77% |
+| Beast | ~85% (deterministic only; flash fallback would add more) |
+
+Dedup turns an exact repeated output into an ~8-token back-reference (~99% on repeats).
+Caveats: estimate not a real tokenizer; excludes oracle/coaching/hook overhead; real
+workloads with small outputs save less (the threshold gate prevents churn).
 ```
 
 ## License
