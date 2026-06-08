@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # flash-client.sh — Shared Flash LLM utility for Julius.
-# Calls Anthropic Haiku with credentials from the environment.
+# Calls Anthropic Haiku with credentials from the environment or Claude Code OAuth.
 # Usage: echo "prompt + content" | flash-client.sh [--model MODEL] [--max-tokens N]
 set -euo pipefail
 
 API_URL="https://api.anthropic.com/v1/messages"
-MODEL="${JULIUS_FLASH_MODEL:-claude-3-5-haiku-latest}"
+MODEL="${JULIUS_FLASH_MODEL:-claude-haiku-4-5-20251001}"
 MAX_TOKENS="${JULIUS_FLASH_MAX_TOKENS:-512}"
 TIMEOUT="${JULIUS_FLASH_TIMEOUT:-10}"
 
@@ -32,10 +32,33 @@ API_KEY="${API_KEY%"${API_KEY##*[![:space:]]}"}"   # rtrim
 API_KEY="${API_KEY%\"}"; API_KEY="${API_KEY#\"}"
 API_KEY="${API_KEY%\'}"; API_KEY="${API_KEY#\'}"
 
+# Fallback: Claude Code OAuth token (~/.claude/.credentials.json).
+AUTH_HEADER=""
 if [ -z "$API_KEY" ]; then
-  echo "ERROR: ANTHROPIC_API_KEY not found. Set it in env or ~/.claude/.env" >&2
+  CREDS_FILE="$HOME/.claude/.credentials.json"
+  if [ -f "$CREDS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    OAUTH_TOKEN=$(python3 -c "
+import json, sys, time
+try:
+    d = json.load(open('$CREDS_FILE'))['claudeAiOauth']
+    exp = d.get('expiresAt', 0)
+    # expiresAt is in milliseconds
+    if exp and exp / 1000 < time.time():
+        sys.exit(1)
+    print(d['accessToken'])
+except Exception:
+    sys.exit(1)
+" 2>/dev/null) || OAUTH_TOKEN=""
+    [ -n "$OAUTH_TOKEN" ] && AUTH_HEADER="Authorization: Bearer $OAUTH_TOKEN"
+  fi
+fi
+
+if [ -z "$API_KEY" ] && [ -z "$AUTH_HEADER" ]; then
+  echo "ERROR: No credentials found. Set ANTHROPIC_API_KEY or log in via Claude Code." >&2
   exit 1
 fi
+
+[ -z "$AUTH_HEADER" ] && AUTH_HEADER="x-api-key: $API_KEY"
 
 # Read stdin (the prompt + content to send).
 INPUT=""
@@ -50,7 +73,7 @@ REQUEST=$(jq -n \
 
 RESPONSE=$(curl -s -m "$TIMEOUT" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
+  -H "$AUTH_HEADER" \
   -H "anthropic-version: 2023-06-01" \
   -d "$REQUEST" \
   "$API_URL" 2>/dev/null || echo '{"type":"error","error":{"message":"request failed"}}')

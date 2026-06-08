@@ -1,6 +1,6 @@
 {
   "name": "julius-plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Token economy plugin for Claude Code — Normal, Pro & Beast modes. Every token counts.",
   "bin": {
     "julius-plugin": "bin/install.sh"

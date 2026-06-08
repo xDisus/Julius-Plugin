@@ -24,9 +24,12 @@ if [ -z "$ROOT" ]; then
   done
 fi
 
+LOCAL_VERSION="unknown"
+[ -f "$ROOT/plugin.json" ] && LOCAL_VERSION=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$ROOT/plugin.json" 2>/dev/null | head -1 | sed 's/.*: *"\(.*\)"/\1/')
+
 echo ""
 printf "\033${BOLD}🧠 Julius Doctor\033${NC}\n"
-echo "   v1.0.0 — Token Economy Plugin"
+echo "   v$LOCAL_VERSION — Token Economy Plugin"
 echo ""
 
 # ── INSTALL ──
@@ -118,12 +121,39 @@ done
 echo ""
 printf "\033${BOLD}═══ ENVIRONMENT ═══\033${NC}\n"
 
+CREDS_OK=false
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-  ok "ANTHROPIC_API_KEY set"
-elif [ -f "$HOME/.claude/.env" ]; then
-  grep -q 'ANTHROPIC_API_KEY=' "$HOME/.claude/.env" 2>/dev/null && ok "ANTHROPIC_API_KEY in ~/.claude/.env" || warn "ANTHROPIC_API_KEY not found — Pro+/Beast limited"
-else
-  warn "ANTHROPIC_API_KEY not set"
+  ok "Credentials: ANTHROPIC_API_KEY (env)"
+  CREDS_OK=true
+elif [ -f "$HOME/.claude/.env" ] && grep -q 'ANTHROPIC_API_KEY=' "$HOME/.claude/.env" 2>/dev/null; then
+  ok "Credentials: ANTHROPIC_API_KEY (~/.claude/.env)"
+  CREDS_OK=true
+fi
+
+if [ "$CREDS_OK" = "false" ]; then
+  OAUTH_FILE="$HOME/.claude/.credentials.json"
+  if [ -f "$OAUTH_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    OAUTH_OK=$(python3 -c "
+import json, sys, time
+try:
+    d = json.load(open('$OAUTH_FILE'))['claudeAiOauth']
+    exp = d.get('expiresAt', 0)
+    if exp and exp / 1000 < time.time():
+        print('expired')
+        sys.exit(0)
+    tier = d.get('subscriptionType', 'unknown')
+    print(tier)
+except Exception:
+    print('none')
+" 2>/dev/null)
+    case "$OAUTH_OK" in
+      expired) warn "Credentials: Claude Code OAuth token expired — re-login with 'claude login'" ;;
+      none|"")  warn "Credentials: no API key or OAuth token — Oracle/Flash disabled" ;;
+      *)        ok "Credentials: Claude Code OAuth ($OAUTH_OK plan) — Oracle/Flash active" ;;
+    esac
+  else
+    warn "Credentials: no API key or OAuth token — Oracle/Flash disabled"
+  fi
 fi
 
 STATE_DIR="${CLAUDE_PLUGIN_DATA:-$(pwd)/.claude/julius}"
@@ -193,6 +223,38 @@ printf "\033${BOLD}═══ DISTRIBUTION ═══\033${NC}\n"
 
 [ -f "$ROOT/.claude-plugin/marketplace.json" ] && ok "Marketplace manifest" || warn "No marketplace manifest"
 [ -f "$ROOT/package.json" ] && ok "npm package.json" || warn "No package.json — npx unavailable"
+
+# ── UPDATE CHECK ──
+echo ""
+printf "\033${BOLD}═══ UPDATE CHECK ═══\033${NC}\n"
+
+REPO_RAW="https://raw.githubusercontent.com/xDisus/Julius-Plugin/master/plugin.json"
+REMOTE_VERSION=$(curl -s --max-time 4 "$REPO_RAW" 2>/dev/null | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"/\1/')
+
+if [ -z "$REMOTE_VERSION" ]; then
+  warn "Update check failed — no network or repo unreachable"
+elif [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
+  ok "Up to date (v$LOCAL_VERSION)"
+else
+  # semver: compare each segment
+  _semver_gt() {
+    IFS='.' read -r a1 a2 a3 <<EOF
+$1
+EOF
+    IFS='.' read -r b1 b2 b3 <<EOF
+$2
+EOF
+    [ "${a1:-0}" -gt "${b1:-0}" ] && return 0
+    [ "${a1:-0}" -eq "${b1:-0}" ] && [ "${a2:-0}" -gt "${b2:-0}" ] && return 0
+    [ "${a1:-0}" -eq "${b1:-0}" ] && [ "${a2:-0}" -eq "${b2:-0}" ] && [ "${a3:-0}" -gt "${b3:-0}" ] && return 0
+    return 1
+  }
+  if _semver_gt "$REMOTE_VERSION" "$LOCAL_VERSION"; then
+    warn "Update available: v$LOCAL_VERSION → v$REMOTE_VERSION  (re-run install to upgrade)"
+  else
+    ok "Local v$LOCAL_VERSION is ahead of remote v$REMOTE_VERSION (unreleased changes)"
+  fi
+fi
 
 # ── SUMMARY ──
 echo ""
